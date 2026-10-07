@@ -4,7 +4,7 @@
 
 XFlight Pattern is a local Windows training application for Microsoft Flight Simulator 2024, focused on VFR traffic-pattern training.
 
-This repository is currently at **M1 — Airport & Weather Domain**. M1 adds the normalized airport, runway-end, and wind domain plus deterministic runway recommendation logic. It contains contracts only for airport and weather providers; no live data source is implemented.
+This repository is currently at **M2 — Circuit Definition**. In addition to the M1 airport, runway-end, wind, and recommendation domain, Core can define which runway-end circuit is being trained, its resolved traffic-pattern side, and its resolved pattern altitude. No live data source or pattern geometry is implemented.
 
 ## Requirements
 

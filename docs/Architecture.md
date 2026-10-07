@@ -6,7 +6,7 @@
 
 XFlight Pattern is a local Windows application for VFR traffic-pattern training with Microsoft Flight Simulator 2024. Version 0.1.0 targets a Cessna 172 reference aircraft, simulator telemetry, weather inputs, training guidance, deterministic debriefing, and session record/replay.
 
-M1 adds the airport/weather domain and the R1 runway recommendation calculation. It does not add runtime integrations, pattern logic, detection, coaching, scoring, replay, or product UI.
+M2 adds the circuit-definition domain after the M1 airport/weather domain and R1 runway recommendation calculation. It does not add runtime integrations, pattern geometry, detection, coaching, scoring, replay, or product UI.
 
 ## Frozen principles
 
@@ -43,6 +43,16 @@ R1 evaluates each usable runway end independently using its exact stored heading
 
 Directional wind candidates rank by descending signed longitudinal component, then lower crosswind, then ordinal runway-end identifier and exact heading for a stable tie break. This is wind geometry, not an operational-safety determination or ATC clearance. Calm, variable, and unavailable wind return `NoWindPreferredRunway`; no airport procedure is fabricated. Gust is retained as provenance data but sustained speed drives the M1 calculation.
 
+## M2 circuit-definition domain
+
+M2 defines what circuit is being trained. An immutable `CircuitDefinition` retains the airport identity, selected directional runway end, traffic-pattern side resolution, and pattern-altitude resolution. Reciprocal runway ends remain independent, so runway 16 may be left traffic while runway 34 is right traffic.
+
+Traffic-pattern side is `Left`, `Right`, or `Unknown`. Unknown remains unknown: wind, geography, and terrain do not infer a side, and there is no hidden left default. Side provenance is retained as `Published`, `XFlightVerified`, or `UserSelected`; an unknown side can only have unknown provenance. Deterministic precedence is published, then XFlight-verified, then user-selected, then unknown. Published wins the explicit published-versus-verified tie decision.
+
+Altitude types keep airport elevation MSL, pattern height AGL, and target pattern altitude MSL distinct. Published and XFlight-verified authority are direct MSL targets. User selection may be a direct MSL target or an AGL height derived using airport elevation. The Version 0.1.0 C172 training default is explicitly 1,000 ft AGL and is labeled `TrainingDefault`, never published. It is used only when explicitly requested and airport elevation is available; otherwise altitude remains unresolved. Altitude precedence is published, XFlight-verified, user-selected, explicitly requested training default, then unresolved.
+
+M3 will define where a circuit exists geometrically. M2 contains no pattern points, bearings, leg corridors, spacing, entry targets, base-turn positions, phase detection, coaching, or scoring.
+
 ## Dependency boundaries
 
 ```text
@@ -58,5 +68,5 @@ Core
 App --> Core, Telemetry, SimConnect, ActiveSky, Infrastructure
 ```
 
-Dependencies point toward stable abstractions. Core has no project dependencies. Adapter-specific and UI-specific types stay outside Core. M0 introduces no integration SDK packages or speculative architectural frameworks.
+Dependencies point toward stable abstractions. Core has no project dependencies. Adapter-specific and UI-specific types stay outside Core. M2 introduces no integration SDK packages or speculative architectural frameworks.
 
