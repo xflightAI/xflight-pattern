@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XFlight.Pattern.ActiveSky\XFlight.Pattern.ActiveSky.csproj" />
+    <ProjectReference Include="..\XFlight.Pattern.Core\XFlight.Pattern.Core.csproj" />
+    <ProjectReference Include="..\XFlight.Pattern.Infrastructure\XFlight.Pattern.Infrastructure.csproj" />
+    <ProjectReference Include="..\XFlight.Pattern.SimConnect\XFlight.Pattern.SimConnect.csproj" />
+    <ProjectReference Include="..\XFlight.Pattern.Telemetry\XFlight.Pattern.Telemetry.csproj" />
+  </ItemGroup>
+
+</Project>
