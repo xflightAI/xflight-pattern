@@ -6,7 +6,7 @@
 
 XFlight Pattern is a local Windows application for VFR traffic-pattern training with Microsoft Flight Simulator 2024. Version 0.1.0 targets a Cessna 172 reference aircraft, simulator telemetry, weather inputs, training guidance, deterministic debriefing, and session record/replay.
 
-M0 is repository foundation only. It contains no aeronautical calculations, runtime integrations, detection, coaching, scoring, replay engine, or product UI.
+M1 adds the airport/weather domain and the R1 runway recommendation calculation. It does not add runtime integrations, pattern logic, detection, coaching, scoring, replay, or product UI.
 
 ## Frozen principles
 
@@ -34,6 +34,14 @@ Active Sky FS is a Version 0.1.0 integration target, but it is optional at runti
 | `XFlight.Pattern.App` | WPF application and composition root. |
 
 Test projects reference only the production projects whose assembly boundaries they verify.
+
+## M1 airport and weather domain
+
+Core owns the normalized `Airport`, explicit directional `RunwayEnd`, `WindObservation`, `IWeatherSource`, and `IAirportRepository` types. Provider projects may later implement these interfaces, but provider-specific APIs and types must not cross into Core. M1 supplies no Active Sky, simulator, download, parsing, or airport-data implementation.
+
+R1 evaluates each usable runway end independently using its exact stored heading; a runway number is not treated as its heading. Heading input accepts the aviation north equivalents 0° and 360° and stores both canonically as 0°. For a minimum angular difference `delta`, the signed longitudinal component is `speed × cos(delta)` and crosswind magnitude is `speed × abs(sin(delta))`. Results expose separate non-negative headwind, tailwind, and crosswind magnitudes, plus a longitudinal classification, so consumers never interpret a hidden negative-headwind convention.
+
+Directional wind candidates rank by descending signed longitudinal component, then lower crosswind, then ordinal runway-end identifier and exact heading for a stable tie break. This is wind geometry, not an operational-safety determination or ATC clearance. Calm, variable, and unavailable wind return `NoWindPreferredRunway`; no airport procedure is fabricated. Gust is retained as provenance data but sustained speed drives the M1 calculation.
 
 ## Dependency boundaries
 
