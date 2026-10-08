@@ -4,7 +4,7 @@
 
 XFlight Pattern is a local Windows training application for Microsoft Flight Simulator 2024, focused on VFR traffic-pattern training.
 
-This repository is currently at **M2 — Circuit Definition**. In addition to the M1 airport, runway-end, wind, and recommendation domain, Core can define which runway-end circuit is being trained, its resolved traffic-pattern side, and its resolved pattern altitude. No live data source or pattern geometry is implemented.
+This repository is currently at **M3 — Pattern Geometry & Entry**. Core retains the M1 airport/weather and R1 recommendation domain and the M2 circuit authority, and now constructs immutable horizontal training corridors, a static Base Turn Window, and a 45-degree downwind entry from explicit runway thresholds and dimensions. UNKNOWN side returns unavailable geometry; unresolved altitude remains unresolved. No live integrations, phase detection, coaching, scoring, or map UI are implemented.
 
 ## Requirements
 
@@ -31,4 +31,6 @@ dotnet test
 - `docs` — architecture and milestone documentation
 
 See [Architecture](docs/Architecture.md) and [Development Milestones](docs/Development-Milestones.md) for the frozen foundation constraints.
+
+See [M3 Geometry](docs/M3-Geometry.md) for WGS84 local ENU, runway axes, metre-based parameters, mirrored corridor bounds, and the horizontal-only M3/M4 boundary. These are training references, not ATC clearances or universally appropriate entry procedures.
 

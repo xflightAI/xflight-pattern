@@ -6,7 +6,7 @@
 
 XFlight Pattern is a local Windows application for VFR traffic-pattern training with Microsoft Flight Simulator 2024. Version 0.1.0 targets a Cessna 172 reference aircraft, simulator telemetry, weather inputs, training guidance, deterministic debriefing, and session record/replay.
 
-M2 adds the circuit-definition domain after the M1 airport/weather domain and R1 runway recommendation calculation. It does not add runtime integrations, pattern geometry, detection, coaching, scoring, replay, or product UI.
+M2 adds the circuit-definition domain after the M1 airport/weather domain and R1 runway recommendation calculation. M3 adds static horizontal pattern geometry and the authorized 45-degree entry, without runtime integrations, detection, coaching, scoring, replay, or product UI.
 
 ## Frozen principles
 
@@ -51,7 +51,17 @@ Traffic-pattern side is `Left`, `Right`, or `Unknown`. Unknown remains unknown: 
 
 Altitude types keep airport elevation MSL, pattern height AGL, and target pattern altitude MSL distinct. Published and XFlight-verified authority are direct MSL targets. User selection may be a direct MSL target or an AGL height derived using airport elevation. The Version 0.1.0 C172 training default is explicitly 1,000 ft AGL and is labeled `TrainingDefault`, never published. It is used only when explicitly requested and airport elevation is available; otherwise altitude remains unresolved. Altitude precedence is published, XFlight-verified, user-selected, explicitly requested training default, then unresolved.
 
-M3 will define where a circuit exists geometrically. M2 contains no pattern points, bearings, leg corridors, spacing, entry targets, base-turn positions, phase detection, coaching, or scoring.
+M2 contains no geometry, phase detection, coaching, or scoring. M3 consumes its immutable circuit definition without changing resolution or precedence.
+
+## M3 horizontal geometry
+
+Core's `Geometry` domain locates the selected circuit from an airport/runway-end reference and landing/opposite WGS84 threshold coordinates. The landing threshold anchors a local ECEF/ENU tangent plane; the opposite threshold defines the forward axis and local horizontal runway length. Stored `RunwayEnd.Heading` is not a geographic bearing authority. AlongTrack points forward and CrossTrack points right; LEFT uses negative CrossTrack and RIGHT uses positive CrossTrack.
+
+All seven horizontal dimensions are explicit positive distances stored in metres. Immutable flat-ended leg corridors and bounded base areas are detection references. M3 supplies no aircraft membership calculation. The Base Turn Window spans configured nearer/farther limits before the landing threshold; the base area permits all positions in that window without choosing a turn point. The entry joins downwind abeam runway midpoint at 45 degrees from outside the lateral circuit boundary.
+
+UNKNOWN side returns an explicit unavailable result. The source circuit and all side/altitude provenance remain intact, including unresolved altitude. ENU uses ellipsoid height zero solely for horizontal projection; it creates no target altitude or vertical limits. LEFT/RIGHT geometry mirrors exactly in runway coordinates. Outputs contain fixed named immutable values, with value equality and stable corner ordering.
+
+See [M3 Geometry](M3-Geometry.md) for precise bounds and validation. M4-or-later aircraft detection, turn timing, transition cues, coaching, wind correction, and telemetry processing require separate authority. Core remains free of external GIS packages and adapter dependencies.
 
 ## Dependency boundaries
 
@@ -68,5 +78,5 @@ Core
 App --> Core, Telemetry, SimConnect, ActiveSky, Infrastructure
 ```
 
-Dependencies point toward stable abstractions. Core has no project dependencies. Adapter-specific and UI-specific types stay outside Core. M2 introduces no integration SDK packages or speculative architectural frameworks.
+Dependencies point toward stable abstractions. Core has no project or package dependencies. Adapter-specific and UI-specific types stay outside Core. M2 and M3 introduce no integration SDK packages or speculative architectural frameworks.
 
