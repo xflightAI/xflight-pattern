@@ -2,12 +2,11 @@ using XFlight.Pattern.Core.Geometry;
 
 namespace XFlight.Pattern.Core.PhaseDetection;
 
-/// <summary>Pure single-snapshot inbound transition. The caller must preserve the direction-speed input
-/// with configuration and checkpoint provenance; PhaseDetectionState does not record or prove it.</summary>
-public static class DeterministicPhaseTransition
+/// <summary>Pure single-snapshot calculation. PhaseReplayContext owns its certified replay provenance.</summary>
+internal static class DeterministicPhaseTransition
 {
-    /// <summary>Advances one validated checkpoint. This slice emits transitions but no cues.</summary>
-    public static PhaseDetectionResult Evaluate(PhaseDetectionConfiguration configuration,
+    /// <summary>Calculates from a locally checked state; PhaseReplayContext certifies its history.</summary>
+    internal static PhaseDetectionResult Evaluate(PhaseDetectionConfiguration configuration,
         PhaseDetectionState previousState, TelemetrySnapshot snapshot,
         double minimumUsableGroundSpeedMetresPerSecond)
     {

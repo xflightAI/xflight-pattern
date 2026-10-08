@@ -388,4 +388,180 @@ public sealed class DeterministicPhaseTransitionTests
         }
         Assert.NotEqual(first[1].State, Run(30)[1].State);
     }
+
+    [Fact]
+    public void TrustedOriginHasFixedInputsAndNoPublicStateInjectionPath()
+    {
+        var config = Configuration();
+        var context = new PhaseReplayContext(config, "epoch", 5);
+        var origin = context.Start();
+
+        Assert.Same(config, context.Configuration);
+        Assert.Equal("epoch", context.StreamEpoch);
+        Assert.Equal(5, context.MinimumUsableGroundSpeedMetresPerSecond);
+        Assert.Null(origin.State.LastSampleSequence);
+        Assert.Null(origin.State.LastSourceTime);
+        Assert.Equal(PatternPhase.Unknown, origin.State.ConfirmedPhase);
+        Assert.Null(origin.State.AttemptId);
+        Assert.Null(origin.State.Candidate);
+        Assert.Null(origin.State.LastAcceptedPosition);
+        Assert.Equal(PositionContinuity.NoAcceptedPosition, origin.State.PositionContinuity);
+        Assert.Equal((uint)0, origin.State.TransitionCount);
+        Assert.Equal((uint)0, origin.State.RejectedSampleCount);
+        Assert.Equal(new PhaseCueLatches(false, false, false, false, false), origin.State.CueLatches);
+
+        Assert.Empty(typeof(PhaseReplayCursor).GetConstructors());
+        Assert.DoesNotContain(typeof(PhaseReplayContext).GetMethods(), method =>
+            method.GetParameters().Any(parameter => parameter.ParameterType == typeof(PhaseDetectionState)));
+        Assert.False(typeof(DeterministicPhaseTransition).IsPublic);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PhaseReplayContext(config, "epoch", 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PhaseReplayContext(config, "epoch", double.NaN));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new PhaseReplayContext(config, "epoch", double.PositiveInfinity));
+        Assert.Throws<ArgumentException>(() => new PhaseReplayContext(config, " ", 5));
+    }
+
+    [Fact]
+    public void ContextBindsSpeedAndExactConfigurationDespiteReusedIds()
+    {
+        var config = Configuration();
+        var alteredPolicy = Configuration(enterTolerance: 20);
+        var low = new PhaseReplayContext(config, "epoch", 5);
+        var high = new PhaseReplayContext(config, "epoch", 30);
+        var altered = new PhaseReplayContext(alteredPolicy, "epoch", 5);
+        var point = Point(config, PatternPhase.Entry);
+        var sample = Sample(1, TimeSpan.Zero, point.Position, speed: 25, track: point.Track);
+
+        var lowStep = low.Advance(low.Start(), sample);
+        var highStep = high.Advance(high.Start(), sample);
+        Assert.Equal(PatternPhase.Entry, lowStep.Result.State.Candidate?.Phase);
+        Assert.Null(highStep.Result.State.Candidate);
+        Assert.Same(config, low.Configuration);
+        Assert.Same(alteredPolicy, altered.Configuration);
+        Assert.Equal(config.ConfigurationId, alteredPolicy.ConfigurationId);
+        Assert.NotEqual(config.Policy.TrackEnterToleranceDegrees,
+            alteredPolicy.Policy.TrackEnterToleranceDegrees);
+        Assert.Throws<ArgumentException>(() => high.Advance(lowStep.NextCursor, sample));
+        Assert.Throws<ArgumentException>(() => altered.Advance(lowStep.NextCursor, sample));
+        Assert.Throws<ArgumentException>(() => new PhaseReplayContext(config, "epoch", 5)
+            .Advance(lowStep.NextCursor, sample));
+    }
+
+    [Fact]
+    public void EveryOutcomeReturnsTrustedImmutableSuccessorAndPreservesRejectionCount()
+    {
+        var config = Configuration();
+        var context = new PhaseReplayContext(config, "epoch", 5);
+        var origin = context.Start();
+        var point = Point(config, PatternPhase.Entry);
+        var accepted = context.Advance(origin, Sample(1, TimeSpan.Zero, point.Position,
+            track: point.Track));
+        Assert.Equal(DetectionCycleOutcome.Accepted, accepted.Result.Outcome);
+        Assert.Null(origin.State.LastSampleSequence);
+
+        var interrupted = context.Advance(accepted.NextCursor,
+            Sample(2, TimeSpan.FromSeconds(1), null, track: point.Track));
+        Assert.Equal(DetectionCycleOutcome.Interrupted, interrupted.Result.Outcome);
+        Assert.Equal(PositionContinuity.Interrupted, interrupted.Result.State.PositionContinuity);
+
+        var wrongEpoch = context.Advance(interrupted.NextCursor,
+            Sample(3, TimeSpan.FromSeconds(2), point.Position, track: point.Track, epoch: "other"));
+        Assert.Equal(DetectionCycleOutcome.Rejected, wrongEpoch.Result.Outcome);
+        Assert.Equal(SampleRejectionReason.EpochMismatch, wrongEpoch.Result.RejectionReason);
+        Assert.Equal((uint)1, wrongEpoch.Result.State.RejectedSampleCount);
+        Assert.Equal(interrupted.Result.State.LastSampleSequence, wrongEpoch.Result.State.LastSampleSequence);
+
+        var duplicate = context.Advance(wrongEpoch.NextCursor,
+            Sample(2, TimeSpan.FromSeconds(1), point.Position, track: point.Track));
+        Assert.Equal(SampleRejectionReason.DuplicateSequence, duplicate.Result.RejectionReason);
+        Assert.Equal((uint)2, duplicate.Result.State.RejectedSampleCount);
+
+        var resumed = context.Advance(duplicate.NextCursor,
+            Sample(3, TimeSpan.FromSeconds(2), point.Position, track: point.Track));
+        Assert.Equal(DetectionCycleOutcome.Accepted, resumed.Result.Outcome);
+        Assert.Equal((uint)2, resumed.Result.State.RejectedSampleCount);
+        Assert.Equal(PositionContinuity.Continuous, resumed.Result.State.PositionContinuity);
+        foreach (var step in new[] { accepted, interrupted, wrongEpoch, duplicate, resumed })
+        {
+            Assert.Empty(step.Result.Cues);
+            Assert.Equal(new PhaseCueLatches(false, false, false, false, false),
+                step.Result.State.CueLatches);
+            Assert.Same(context, step.NextCursor.Owner);
+            Assert.Equal(step.Result.State, step.NextCursor.State);
+        }
+    }
+
+    [Fact]
+    public void SameOriginAndSamplesProduceEqualResultsWithoutMutableCursorState()
+    {
+        var config = Configuration();
+        var context = new PhaseReplayContext(config, "epoch", 5);
+        var point = Point(config, PatternPhase.Entry);
+        var samples = new[]
+        {
+            Sample(1, TimeSpan.Zero, point.Position, track: point.Track),
+            Sample(2, TimeSpan.FromSeconds(2), point.Position, track: point.Track),
+            Sample(2, TimeSpan.FromSeconds(2), point.Position, track: point.Track),
+            Sample(3, TimeSpan.FromSeconds(3), null, track: point.Track)
+        };
+        List<PhaseDetectionResult> Run()
+        {
+            var cursor = context.Start();
+            var results = new List<PhaseDetectionResult>();
+            foreach (var sample in samples)
+            {
+                var step = context.Advance(cursor, sample);
+                results.Add(step.Result);
+                cursor = step.NextCursor;
+            }
+            return results;
+        }
+
+        var first = Run();
+        var second = Run();
+        for (var i = 0; i < first.Count; i++)
+        {
+            Assert.Equal(first[i].State, second[i].State);
+            Assert.Equal(first[i].Outcome, second[i].Outcome);
+            Assert.Equal(first[i].RejectionReason, second[i].RejectionReason);
+            Assert.Equal(first[i].InterruptionReason, second[i].InterruptionReason);
+            Assert.Equal(first[i].QualityIssues, second[i].QualityIssues);
+            Assert.Equal(first[i].Transitions, second[i].Transitions);
+            Assert.Equal(first[i].Cues, second[i].Cues);
+        }
+
+        var origin = context.Start();
+        var branchA = context.Advance(origin, samples[0]);
+        var branchB = context.Advance(origin, samples[0]);
+        Assert.Equal(branchA.Result.State, branchB.Result.State);
+        Assert.Null(origin.State.LastSampleSequence);
+    }
+
+    [Theory]
+    [InlineData(TrafficPatternSide.Left)]
+    [InlineData(TrafficPatternSide.Right)]
+    public void TrustedReplayPreservesFourInboundTransitionsWithoutCues(TrafficPatternSide side)
+    {
+        var config = Configuration(side);
+        var context = new PhaseReplayContext(config, "epoch", 5);
+        var cursor = context.Start();
+        var phases = new[] { PatternPhase.Entry, PatternPhase.Downwind, PatternPhase.Base, PatternPhase.Final };
+        ulong sequence = 0;
+        foreach (var target in phases)
+        {
+            var firstTime = TimeSpan.FromSeconds((sequence / 2) * 3);
+            var point = Point(config, target);
+            var first = context.Advance(cursor,
+                Sample(++sequence, firstTime, point.Position, track: point.Track));
+            Assert.Equal(target, first.Result.State.Candidate?.Phase);
+            var confirmed = context.Advance(first.NextCursor,
+                Sample(++sequence, firstTime + TimeSpan.FromSeconds(2), point.Position, track: point.Track));
+            Assert.Equal(target, confirmed.Result.State.ConfirmedPhase);
+            Assert.Single(confirmed.Result.Transitions);
+            Assert.Empty(confirmed.Result.Cues);
+            Assert.Equal(new PhaseCueLatches(false, false, false, false, false),
+                confirmed.Result.State.CueLatches);
+            cursor = confirmed.NextCursor;
+        }
+        Assert.Equal((uint)4, cursor.State.TransitionCount);
+    }
 }
