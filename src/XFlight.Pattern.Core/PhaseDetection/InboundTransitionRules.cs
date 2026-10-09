@@ -11,6 +11,10 @@ internal static class InboundTransitionRules
         _ => null
     };
 
+    // Slice 1 adds only initial departure; Departure has no successor until the crosswind slice.
+    public static bool IsSupportedSuccessor(PatternPhase current, PatternPhase target) =>
+        target == Successor(current) || current == PatternPhase.Unknown && target == PatternPhase.Departure;
+
     public static MovementRegionEvidence Region(GeometryMovementEvidence evidence, PatternPhase phase) => phase switch
     {
         PatternPhase.Entry => evidence.Entry,

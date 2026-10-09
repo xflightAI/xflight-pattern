@@ -49,10 +49,39 @@ internal static class DeterministicPhaseTransition
         var transitionCount = previousState.TransitionCount;
         PhaseTransitionEvent[] transitions = [];
         var target = InboundTransitionRules.Successor(phase);
+        var persistence = configuration.Policy.CandidatePersistence;
+        RunwayContactEvidence? contact = null;
+        var evidence = GeometryMovementEvidence.Evaluate(configuration, snapshot,
+            minimumUsableGroundSpeedMetresPerSecond);
+        if (phase == PatternPhase.Unknown)
+        {
+            var oldContact = previousState.RunwayContact;
+            if (snapshot.OnGround.Value == true && evidence.InsideRunwayContactEnvelope)
+            {
+                // Returning to ground after pending liftoff must establish fresh contact.
+                if (previousState.Candidate?.Phase == PatternPhase.Departure) oldContact = null;
+                contact = oldContact is not null &&
+                    (ContactQualified(configuration, oldContact) ||
+                     snapshot.SourceTime - oldContact.LastSourceTime <= configuration.Policy.MaximumCandidateGap)
+                    ? new RunwayContactEvidence(oldContact.FirstSourceTime, snapshot.SourceTime,
+                        checked(oldContact.SampleCount + 1), snapshot.SampleSequence)
+                    : new RunwayContactEvidence(snapshot.SourceTime, snapshot.SourceTime, 1, snapshot.SampleSequence);
+            }
+            else if (snapshot.OnGround.Value == false && oldContact is not null &&
+                ContactQualified(configuration, oldContact) &&
+                snapshot.GroundSpeedMetresPerSecond.Value >= configuration.Policy.DepartureMinimumSpeedMetresPerSecond &&
+                snapshot.VerticalSpeedMetresPerSecond.Value > 0 &&
+                snapshot.VerticalSpeedMetresPerSecond.Value >= configuration.Policy.DepartureMinimumClimbMetresPerSecond &&
+                InboundTransitionRules.Unambiguous(evidence, phase, PatternPhase.Departure))
+            {
+                contact = oldContact;
+                target = PatternPhase.Departure;
+                persistence = configuration.Policy.DeparturePersistence;
+            }
+            // All other accepted observations discard launch authorization; inbound Entry remains eligible.
+        }
         if (target is { } next && snapshot.OnGround.Value == false)
         {
-            var evidence = GeometryMovementEvidence.Evaluate(configuration, snapshot,
-                minimumUsableGroundSpeedMetresPerSecond);
             if (InboundTransitionRules.Unambiguous(evidence, phase, next))
             {
                 var old = previousState.Candidate;
@@ -61,7 +90,7 @@ internal static class DeterministicPhaseTransition
                     ? new CandidateEvidence(next, old.FirstSourceTime, snapshot.SourceTime,
                         checked(old.SampleCount + 1))
                     : new CandidateEvidence(next, snapshot.SourceTime, snapshot.SourceTime, 1);
-                if (snapshot.SourceTime - candidate.FirstSourceTime >= configuration.Policy.CandidatePersistence)
+                if (snapshot.SourceTime - candidate.FirstSourceTime >= persistence)
                 {
                     transitionCount = checked(transitionCount + 1);
                     if (phase == PatternPhase.Unknown)
@@ -73,13 +102,14 @@ internal static class DeterministicPhaseTransition
                         snapshot.SourceTime, phase, next, attempt)];
                     phase = next;
                     candidate = null;
+                    contact = null;
                 }
             }
         }
 
         var position = new AcceptedPositionEvidence(snapshot.Position.Value!, snapshot.SampleSequence, snapshot.SourceTime);
         var state = Copy(previousState, snapshot.SampleSequence, snapshot.SourceTime, phase, attempt,
-            candidate, transitionCount, previousState.RejectedSampleCount, position, PositionContinuity.Continuous);
+            candidate, transitionCount, previousState.RejectedSampleCount, position, PositionContinuity.Continuous, contact);
         return new PhaseDetectionResult(snapshot, state, DetectionCycleOutcome.Accepted, null,
             issues, transitions, Array.Empty<PhaseCueEvent>());
     }
@@ -97,17 +127,27 @@ internal static class DeterministicPhaseTransition
             throw new ArgumentException("Unstarted checkpoint is inconsistent.", nameof(state));
         if (state.ConfirmedPhase == PatternPhase.Unknown && state.AttemptId is not null)
             throw new ArgumentException("Unknown phase cannot have an inbound attempt.", nameof(state));
-        if (state.ConfirmedPhase is PatternPhase.Entry or PatternPhase.Downwind or PatternPhase.Base or PatternPhase.Final &&
+        if (state.ConfirmedPhase is PatternPhase.Entry or PatternPhase.Departure or PatternPhase.Downwind or PatternPhase.Base or PatternPhase.Final &&
             state.AttemptId is null)
             throw new ArgumentException("Confirmed inbound phase requires an attempt.", nameof(state));
-        if (state.Candidate is { } candidate && (candidate.Phase != InboundTransitionRules.Successor(state.ConfirmedPhase) ||
+        if (state.Candidate is { } candidate && (!InboundTransitionRules.IsSupportedSuccessor(state.ConfirmedPhase, candidate.Phase) ||
             candidate.LastSourceTime != state.LastSourceTime))
-            throw new ArgumentException("Candidate must be the current inbound successor at the cursor.", nameof(state));
+            throw new ArgumentException("Candidate must be a supported successor at the cursor.", nameof(state));
+        if (state.Candidate?.Phase == PatternPhase.Departure &&
+            !ContactQualified(configuration, state.RunwayContact!))
+            throw new ArgumentException("Departure candidate requires qualified runway contact.", nameof(state));
+        if (state.RunwayContact is { } contact && state.Candidate is null &&
+            !GeometryMovementEvidence.Contains(configuration.RunwayContactEnvelope,
+                configuration.GeometryAuthority.RunwayReference.ToRunway(state.LastAcceptedPosition!.Position), 0))
+            throw new ArgumentException("Ground contact anchor must be on the configured runway.", nameof(state));
         if (state.PositionContinuity == PositionContinuity.Continuous &&
             (state.LastAcceptedPosition is not { } anchor ||
              anchor.SampleSequence != state.LastSampleSequence || anchor.SourceTime != state.LastSourceTime))
             throw new ArgumentException("Continuous anchor must match the consumed cursor.", nameof(state));
     }
+
+    private static bool ContactQualified(PhaseDetectionConfiguration configuration, RunwayContactEvidence contact) =>
+        contact.LastSourceTime - contact.FirstSourceTime >= configuration.Policy.GroundContactPersistence;
 
     private static bool IsImplausibleRelocation(PhaseDetectionConfiguration configuration,
         PhaseDetectionState previousState, TelemetrySnapshot snapshot)
@@ -129,7 +169,7 @@ internal static class DeterministicPhaseTransition
         var state = Copy(previousState, previousState.LastSampleSequence, previousState.LastSourceTime,
             previousState.ConfirmedPhase, previousState.AttemptId, previousState.Candidate,
             previousState.TransitionCount, checked(previousState.RejectedSampleCount + 1),
-            previousState.LastAcceptedPosition, previousState.PositionContinuity);
+            previousState.LastAcceptedPosition, previousState.PositionContinuity, previousState.RunwayContact);
         return new PhaseDetectionResult(snapshot, state, DetectionCycleOutcome.Rejected, reason,
             Array.Empty<TelemetryQualityIssue>(), Array.Empty<PhaseTransitionEvent>(), Array.Empty<PhaseCueEvent>());
     }
@@ -141,17 +181,18 @@ internal static class DeterministicPhaseTransition
             previousState.ConfirmedPhase, previousState.AttemptId, null, previousState.TransitionCount,
             previousState.RejectedSampleCount, previousState.LastAcceptedPosition,
             previousState.LastAcceptedPosition is null
-                ? PositionContinuity.NoAcceptedPosition : PositionContinuity.Interrupted);
+                ? PositionContinuity.NoAcceptedPosition : PositionContinuity.Interrupted, null);
         return new PhaseDetectionResult(snapshot, state, DetectionCycleOutcome.Interrupted, null,
             issues, Array.Empty<PhaseTransitionEvent>(), Array.Empty<PhaseCueEvent>(), reason);
     }
 
     private static PhaseDetectionState Copy(PhaseDetectionState previousState, ulong? sequence,
         TimeSpan? sourceTime, PatternPhase phase, DetectionAttemptIdentity? attempt, CandidateEvidence? candidate,
-        uint transitionCount, uint rejectedCount, AcceptedPositionEvidence? position, PositionContinuity continuity) =>
+        uint transitionCount, uint rejectedCount, AcceptedPositionEvidence? position, PositionContinuity continuity,
+        RunwayContactEvidence? contact) =>
         new(previousState.AlgorithmId, previousState.ConfigurationId, previousState.StreamEpoch,
             sequence, sourceTime, phase, attempt, candidate, transitionCount, rejectedCount,
-            previousState.CueLatches, position, continuity);
+            previousState.CueLatches, position, continuity, contact);
 
     private static List<TelemetryQualityIssue> QualityIssues(TelemetrySnapshot snapshot)
     {

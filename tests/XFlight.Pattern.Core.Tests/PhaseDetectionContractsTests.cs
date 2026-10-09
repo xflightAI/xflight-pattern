@@ -372,6 +372,107 @@ public class PhaseDetectionContractsTests
             new(true, false, false, false, false)));
     }
 
+    [Fact]
+    public void RunwayContactEvidenceIsImmutableAndRejectsInvalidIntervals()
+    {
+        var evidence = new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.FromSeconds(3), 2, 2);
+        Assert.Equal(evidence, new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.FromSeconds(3), 2, 2));
+        Assert.All(typeof(RunwayContactEvidence).GetProperties(), property => Assert.Null(property.SetMethod));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RunwayContactEvidence(TimeSpan.FromTicks(-1), TimeSpan.Zero, 2, 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RunwayContactEvidence(TimeSpan.FromSeconds(3), TimeSpan.Zero, 2, 2));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.Zero, 0, 1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.Zero, 1, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.Zero, 3, 2));
+        Assert.Throws<ArgumentException>(() => new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.FromSeconds(3), 1, 2));
+        Assert.Equal(TimeSpan.Zero, new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.Zero, 2, 2).LastSourceTime);
+    }
+
+    private static PhaseDetectionState RunwayContactState(RunwayContactEvidence? contact,
+        CandidateEvidence? candidate = null, PatternPhase phase = PatternPhase.Unknown,
+        ulong? sequence = 2, double? seconds = 3, PositionContinuity continuity = PositionContinuity.Continuous,
+        DetectionAttemptIdentity? attempt = null, ulong? anchorSequence = null, double? anchorSeconds = null) =>
+        new("a", "c", "e", sequence, seconds is { } time ? TimeSpan.FromSeconds(time) : null,
+            phase, attempt, candidate, 0, 0, new(false, false, false, false, false),
+            sequence is { } seq ? new(new GeographicCoordinate(45, 9), anchorSequence ?? seq,
+                TimeSpan.FromSeconds(anchorSeconds ?? seconds!.Value)) : null,
+            continuity, contact);
+
+    [Fact]
+    public void RunwayContactStatePreservesExistingConstructorAndValueEquality()
+    {
+        Assert.NotNull(typeof(PhaseDetectionState).GetConstructor([
+            typeof(string), typeof(string), typeof(string), typeof(ulong?), typeof(TimeSpan?),
+            typeof(PatternPhase), typeof(DetectionAttemptIdentity), typeof(CandidateEvidence),
+            typeof(uint), typeof(uint), typeof(PhaseCueLatches), typeof(AcceptedPositionEvidence), typeof(PositionContinuity)]));
+        var oldState = State();
+        Assert.Null(oldState.RunwayContact);
+        Assert.Equal(oldState, new PhaseDetectionState(oldState.AlgorithmId, oldState.ConfigurationId,
+            oldState.StreamEpoch, oldState.LastSampleSequence, oldState.LastSourceTime, oldState.ConfirmedPhase,
+            oldState.AttemptId, oldState.Candidate, oldState.TransitionCount, oldState.RejectedSampleCount,
+            oldState.CueLatches, oldState.LastAcceptedPosition, oldState.PositionContinuity, null));
+        var contact = new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.FromSeconds(3), 2, 2);
+        var ground = RunwayContactState(contact);
+        Assert.Equal(ground, RunwayContactState(new(TimeSpan.Zero, TimeSpan.FromSeconds(3), 2, 2)));
+        Assert.NotEqual(ground, RunwayContactState(null));
+        Assert.NotEqual(ground, RunwayContactState(new(TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(3), 2, 2)));
+        var airborne = RunwayContactState(contact,
+            new(PatternPhase.Departure, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(5), 2), sequence: 4, seconds: 5);
+        Assert.Equal(contact, airborne.RunwayContact);
+        Assert.Equal(PatternPhase.Departure, airborne.Candidate!.Phase);
+        // Source-time equality at liftoff is valid when the ground sample sequence is strictly earlier.
+        Assert.NotNull(RunwayContactState(contact,
+            new(PatternPhase.Departure, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3), 1), sequence: 3).RunwayContact);
+    }
+
+    [Theory]
+    [InlineData("origin")]
+    [InlineData("phase")]
+    [InlineData("attempt")]
+    [InlineData("entry-candidate")]
+    [InlineData("interrupted")]
+    [InlineData("future-sequence")]
+    [InlineData("future-time")]
+    [InlineData("stale-ground-sequence")]
+    [InlineData("stale-ground-time")]
+    [InlineData("airborne-sequence")]
+    [InlineData("ground-after-liftoff")]
+    [InlineData("stale-candidate")]
+    [InlineData("stale-anchor-sequence")]
+    [InlineData("stale-anchor-time")]
+    public void RunwayContactStateRejectsContradictoryEvidence(string contradiction)
+    {
+        var contact = new RunwayContactEvidence(TimeSpan.Zero, TimeSpan.FromSeconds(3), 2, 2);
+        var departure = new CandidateEvidence(PatternPhase.Departure, TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(5), 2);
+        Assert.Throws<ArgumentException>(() => contradiction switch
+        {
+            "origin" => RunwayContactState(contact, sequence: null, seconds: null, continuity: PositionContinuity.NoAcceptedPosition),
+            "phase" => RunwayContactState(contact, phase: PatternPhase.Departure),
+            "attempt" => RunwayContactState(contact, attempt: new("a", "c", "e", 1)),
+            "entry-candidate" => RunwayContactState(contact, new(PatternPhase.Entry, TimeSpan.FromSeconds(3), TimeSpan.FromSeconds(3), 1)),
+            "interrupted" => RunwayContactState(contact, continuity: PositionContinuity.Interrupted),
+            "future-sequence" => RunwayContactState(new(TimeSpan.Zero, TimeSpan.FromSeconds(3), 2, 3)),
+            "future-time" => RunwayContactState(new(TimeSpan.Zero, TimeSpan.FromSeconds(4), 2, 2)),
+            "stale-ground-sequence" => RunwayContactState(contact, sequence: 3),
+            "stale-ground-time" => RunwayContactState(contact, seconds: 4),
+            "airborne-sequence" => RunwayContactState(contact, departure, seconds: 5),
+            "ground-after-liftoff" => RunwayContactState(new(TimeSpan.Zero, TimeSpan.FromSeconds(5), 2, 2), departure, sequence: 3, seconds: 5),
+            "stale-candidate" => RunwayContactState(contact, departure, sequence: 4, seconds: 6),
+            "stale-anchor-sequence" => RunwayContactState(contact, anchorSequence: 1),
+            "stale-anchor-time" => RunwayContactState(contact, anchorSeconds: 2),
+            _ => throw new InvalidOperationException()
+        });
+    }
+
+    [Fact]
+    public void DepartureCandidateRequiresContactEvenThroughExistingStateConstructor()
+    {
+        var candidate = new CandidateEvidence(PatternPhase.Departure, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(5), 1);
+        Assert.Throws<ArgumentException>(() => RunwayContactState(null, candidate, sequence: 3, seconds: 5));
+        Assert.Throws<ArgumentException>(() => new PhaseDetectionState("algorithm-v1", "config-a", "epoch-1", 1,
+            TimeSpan.FromSeconds(5), PatternPhase.Unknown, null, candidate, 0, 0,
+            new(false, false, false, false, false), State().LastAcceptedPosition, PositionContinuity.Continuous));
+    }
+
     // TODO (future detector transition tests): previousState is required. The first From matches the prior phase;
     // TransitionCount changes by exactly the emitted transitions; rejected results preserve prior
     // phase, candidate, cursor, position and latches while incrementing rejection count; new attempts
