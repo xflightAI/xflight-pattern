@@ -127,7 +127,7 @@ internal static class DeterministicPhaseTransition
             throw new ArgumentException("Unstarted checkpoint is inconsistent.", nameof(state));
         if (state.ConfirmedPhase == PatternPhase.Unknown && state.AttemptId is not null)
             throw new ArgumentException("Unknown phase cannot have an inbound attempt.", nameof(state));
-        if (state.ConfirmedPhase is PatternPhase.Entry or PatternPhase.Departure or PatternPhase.Downwind or PatternPhase.Base or PatternPhase.Final &&
+        if (state.ConfirmedPhase is PatternPhase.Entry or PatternPhase.Departure or PatternPhase.Crosswind or PatternPhase.Downwind or PatternPhase.Base or PatternPhase.Final &&
             state.AttemptId is null)
             throw new ArgumentException("Confirmed inbound phase requires an attempt.", nameof(state));
         if (state.Candidate is { } candidate && (!InboundTransitionRules.IsSupportedSuccessor(state.ConfirmedPhase, candidate.Phase) ||
