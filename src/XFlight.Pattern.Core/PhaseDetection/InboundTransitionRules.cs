@@ -7,12 +7,13 @@ internal static class InboundTransitionRules
         PatternPhase.Unknown => PatternPhase.Entry,
         PatternPhase.Entry => PatternPhase.Downwind,
         PatternPhase.Departure => PatternPhase.Crosswind,
+        PatternPhase.Crosswind => PatternPhase.Downwind,
         PatternPhase.Downwind => PatternPhase.Base,
         PatternPhase.Base => PatternPhase.Final,
         _ => null
     };
 
-    // Initial departure uses its launch gate; Crosswind has no successor in this slice.
+    // Initial departure uses its launch gate; the other successors use shared leg evidence.
     public static bool IsSupportedSuccessor(PatternPhase current, PatternPhase target) =>
         target == Successor(current) || current == PatternPhase.Unknown && target == PatternPhase.Departure;
 

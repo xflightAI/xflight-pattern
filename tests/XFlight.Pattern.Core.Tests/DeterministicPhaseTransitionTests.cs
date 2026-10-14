@@ -933,7 +933,7 @@ public sealed class DeterministicPhaseTransitionTests
     }
 
     [Fact]
-    public void CrosswindRemainsTerminalInThisSliceAndDoesNotArmAnotherGate()
+    public void CrosswindUnauthorizedTransitionsDoNotArmAnotherGate()
     {
         var context = Context(Configuration());
         var gate = DepartureGate(context);
@@ -943,11 +943,10 @@ public sealed class DeterministicPhaseTransitionTests
         var crosswind = At(context, candidate.NextCursor, 6, TimeSpan.FromSeconds(11), PatternPhase.Crosswind);
         Assert.Equal(PatternPhase.Crosswind, crosswind.Result.State.ConfirmedPhase);
         var cursor = crosswind.NextCursor;
-        var geometry = context.Configuration.GeometryAuthority.Geometry!;
         var samples = new[]
         {
-            DepartureSample(7, 12, point: Midpoint(geometry.Downwind.Axis), track: 180),
-            DepartureSample(8, 14, point: Midpoint(geometry.Downwind.Axis), track: 180),
+            DepartureSample(7, 12, point: new(-800, -400), track: 90),
+            DepartureSample(8, 14, point: new(-300, 0)),
             DepartureSample(9, 15, onGround: true),
             DepartureSample(10, 18, onGround: true),
             DepartureSample(11, 19),
@@ -1352,6 +1351,442 @@ public sealed class DeterministicPhaseTransitionTests
         var departure = ConfirmDeparture(context);
         var branchA = context.Advance(departure.NextCursor, CrosswindSample(context, 5, 9));
         var branchB = context.Advance(departure.NextCursor, CrosswindSample(context, 5, 9));
+        Assert.Equal(branchA.Result.State, branchB.Result.State);
+    }
+
+    private static (PhaseDetectionResult Result, PhaseReplayCursor NextCursor) ConfirmCrosswind(PhaseReplayContext context)
+    {
+        var departure = ConfirmDeparture(context);
+        var step = context.Advance(departure.NextCursor, CrosswindSample(context, 5, 9));
+        var elapsed = TimeSpan.Zero;
+        ulong sequence = 5;
+        while (elapsed < context.Configuration.Policy.CandidatePersistence)
+        {
+            var remaining = context.Configuration.Policy.CandidatePersistence - elapsed;
+            elapsed += remaining < context.Configuration.Policy.MaximumCandidateGap
+                ? remaining : context.Configuration.Policy.MaximumCandidateGap;
+            step = At(context, step.NextCursor, ++sequence, TimeSpan.FromSeconds(9) + elapsed, PatternPhase.Crosswind);
+        }
+        Assert.Equal(PatternPhase.Crosswind, step.Result.State.ConfirmedPhase);
+        return step;
+    }
+
+    private static TelemetrySnapshot DownwindSample(PhaseReplayContext context, ulong sequence, double seconds,
+        RunwayCoordinate? point = null, bool positionAvailable = true) =>
+        Sample(sequence, TimeSpan.FromSeconds(seconds), positionAvailable
+            ? point is { } coordinate ? Geographic(coordinate) : Point(context.Configuration, PatternPhase.Downwind).Position
+            : null, speed: 5, track: 180);
+
+    [Theory]
+    [InlineData(TrafficPatternSide.Left, false)]
+    [InlineData(TrafficPatternSide.Right, false)]
+    [InlineData(TrafficPatternSide.Left, true)]
+    [InlineData(TrafficPatternSide.Right, true)]
+    public void OutboundFullChainJoinsBaseAndFinalWithOneStableAttempt(TrafficPatternSide side, bool eastbound)
+    {
+        var context = Context(Configuration(side, eastbound: eastbound));
+        var geometry = context.Configuration.GeometryAuthority.Geometry!;
+        var sign = side == TrafficPatternSide.Left ? -1 : 1;
+        GeographicCoordinate Position(RunwayCoordinate point) => eastbound
+            ? new(-point.CrossTrackMetres / 110_574.2758, point.AlongTrackMetres / 111_319.4907)
+            : Geographic(point);
+        var firstGround = context.Advance(context.Start(), Sample(1, TimeSpan.Zero, Position(new(500, 0)), onGround: true));
+        var ground = context.Advance(firstGround.NextCursor,
+            Sample(2, TimeSpan.FromSeconds(3), Position(new(500, 0)), onGround: true));
+        var cursor = ground.NextCursor;
+        var previous = PatternPhase.Unknown;
+        DetectionAttemptIdentity? attempt = null;
+        uint transitions = 0;
+        ulong sequence = 2;
+        double time = 4;
+        foreach (var target in new[] { PatternPhase.Departure, PatternPhase.Crosswind, PatternPhase.Downwind,
+                     PatternPhase.Base, PatternPhase.Final })
+        {
+            var point = target switch
+            {
+                PatternPhase.Departure => new RunwayCoordinate(500, 0),
+                PatternPhase.Crosswind => Midpoint(geometry.Crosswind.Axis),
+                PatternPhase.Downwind => Midpoint(geometry.Downwind.Axis),
+                PatternPhase.Base => new RunwayCoordinate(-800, sign * 400),
+                PatternPhase.Final => new RunwayCoordinate(-300, 0),
+                _ => throw new InvalidOperationException()
+            };
+            var northTrack = target switch
+            {
+                PatternPhase.Departure or PatternPhase.Final => 0,
+                PatternPhase.Crosswind => sign < 0 ? 270 : 90,
+                PatternPhase.Downwind => 180,
+                PatternPhase.Base => sign < 0 ? 90 : 270,
+                _ => throw new InvalidOperationException()
+            };
+            var track = (northTrack + (eastbound ? 90 : 0)) % 360;
+            var candidate = context.Advance(cursor, Sample(++sequence, TimeSpan.FromSeconds(time),
+                Position(point), track: track, climb: target == PatternPhase.Departure ? 2 : null));
+            Assert.Equal(previous, candidate.Result.State.ConfirmedPhase);
+            Assert.Equal(target, candidate.Result.State.Candidate?.Phase);
+            Assert.Empty(candidate.Result.Transitions);
+            time += target == PatternPhase.Departure ? 4 : 2;
+            var confirmed = context.Advance(candidate.NextCursor, Sample(++sequence, TimeSpan.FromSeconds(time),
+                Position(point), track: track, climb: target == PatternPhase.Departure ? 2 : null));
+            Assert.Equal(DetectionCycleOutcome.Accepted, confirmed.Result.Outcome);
+            Assert.Equal(target, confirmed.Result.State.ConfirmedPhase);
+            Assert.Null(confirmed.Result.State.Candidate);
+            Assert.Null(confirmed.Result.State.RunwayContact);
+            Assert.Equal(++transitions, confirmed.Result.State.TransitionCount);
+            attempt ??= confirmed.Result.State.AttemptId;
+            Assert.Equal(new DetectionAttemptIdentity("algorithm", "config", "epoch", 4), attempt);
+            Assert.Equal(attempt, confirmed.Result.State.AttemptId);
+            var transition = Assert.Single(confirmed.Result.Transitions);
+            Assert.Equal(previous, transition.From);
+            Assert.Equal(target, transition.To);
+            Assert.Equal(new DetectionEventIdentity("algorithm", "config", "epoch", sequence, 0), transition.Identity);
+            Assert.Equal(TimeSpan.FromSeconds(time), transition.SourceTime);
+            Assert.Equal(attempt, transition.AttemptId);
+            Assert.Empty(confirmed.Result.Cues);
+            Assert.Equal(new PhaseCueLatches(false, false, false, false, false), confirmed.Result.State.CueLatches);
+            cursor = confirmed.NextCursor;
+            previous = target;
+            time++;
+        }
+        var afterFinal = context.Advance(cursor, Sample(++sequence, TimeSpan.FromSeconds(time),
+            Position(Midpoint(geometry.Crosswind.Axis)), track: eastbound ? 0 : 270));
+        Assert.Equal(PatternPhase.Final, afterFinal.Result.State.ConfirmedPhase);
+        Assert.Empty(afterFinal.Result.Transitions);
+        Assert.Equal((uint)5, afterFinal.Result.State.TransitionCount);
+    }
+
+    [Theory]
+    [InlineData(TrafficPatternSide.Left)]
+    [InlineData(TrafficPatternSide.Right)]
+    public void DownwindPersistenceIsInclusiveAndEqualSourceTimeAddsNoDuration(TrafficPatternSide side)
+    {
+        var context = Context(Configuration(side));
+        var crosswind = ConfirmCrosswind(context);
+        var first = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        Assert.Equal(PatternPhase.Crosswind, first.Result.State.ConfirmedPhase);
+        Assert.Equal(PatternPhase.Downwind, first.Result.State.Candidate?.Phase);
+        var equal = context.Advance(first.NextCursor, DownwindSample(context, 8, 12));
+        Assert.Equal((uint)2, equal.Result.State.Candidate!.SampleCount);
+        Assert.Empty(equal.Result.Transitions);
+        var before = context.Advance(equal.NextCursor,
+            Sample(9, TimeSpan.FromSeconds(14) - TimeSpan.FromTicks(1),
+                Point(context.Configuration, PatternPhase.Downwind).Position, speed: 5, track: 180));
+        Assert.Equal(PatternPhase.Crosswind, before.Result.State.ConfirmedPhase);
+        Assert.Empty(before.Result.Transitions);
+        var exact = context.Advance(before.NextCursor, DownwindSample(context, 10, 14));
+        Assert.Equal(PatternPhase.Downwind, exact.Result.State.ConfirmedPhase);
+        Assert.Equal((uint)3, exact.Result.State.TransitionCount);
+        Assert.Equal(crosswind.Result.State.AttemptId, exact.Result.State.AttemptId);
+        Assert.Null(exact.Result.State.Candidate);
+        var transition = Assert.Single(exact.Result.Transitions);
+        Assert.Equal(PatternPhase.Crosswind, transition.From);
+        Assert.Equal(PatternPhase.Downwind, transition.To);
+        Assert.Equal(new DetectionEventIdentity("algorithm", "config", "epoch", 10, 0), transition.Identity);
+        Assert.Equal(TimeSpan.FromSeconds(14), transition.SourceTime);
+        Assert.Equal(crosswind.Result.State.AttemptId, transition.AttemptId);
+        Assert.Empty(exact.Result.Cues);
+        Assert.Contains(TelemetryQualityIssue.MissingVerticalSpeed, exact.Result.QualityIssues);
+    }
+
+    [Theory]
+    [InlineData(TrafficPatternSide.Left)]
+    [InlineData(TrafficPatternSide.Right)]
+    public void DownwindEnterEvidenceCannotOverrideCrosswindExitHysteresis(TrafficPatternSide side)
+    {
+        var context = Context(Configuration(side, enterTolerance: 40, exitTolerance: 60));
+        var crosswind = ConfirmCrosswind(context);
+        var pending = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        var end = context.Configuration.GeometryAuthority.Geometry!.Crosswind.Axis.End;
+        var track = side == TrafficPatternSide.Left ? 215 : 145;
+        var inside = new RunwayCoordinate(end.AlongTrackMetres - 65, end.CrossTrackMetres);
+        var sample = Sample(8, TimeSpan.FromSeconds(13), Geographic(inside), speed: 5, track: track);
+        var evidence = GeometryMovementEvidence.Evaluate(context.Configuration, sample, 5);
+        Assert.False(evidence.Crosswind.InsideEnterBounds);
+        Assert.True(evidence.Crosswind.InsideExitBounds);
+        Assert.Equal(DirectionEvidenceStatus.WithinExitTolerance, evidence.Crosswind.Direction.Status);
+        Assert.True(evidence.Downwind.InsideEnterBounds);
+        Assert.Equal(DirectionEvidenceStatus.WithinEnterTolerance, evidence.Downwind.Direction.Status);
+        var held = context.Advance(pending.NextCursor, sample);
+        Assert.Equal(PatternPhase.Crosswind, held.Result.State.ConfirmedPhase);
+        Assert.Null(held.Result.State.Candidate);
+        Assert.Empty(held.Result.Transitions);
+        var outside = new RunwayCoordinate(end.AlongTrackMetres - 71, end.CrossTrackMetres);
+        var fresh = context.Advance(held.NextCursor,
+            Sample(9, TimeSpan.FromSeconds(14), Geographic(outside), speed: 5, track: track));
+        Assert.Equal(TimeSpan.FromSeconds(14), fresh.Result.State.Candidate!.FirstSourceTime);
+        var confirmed = context.Advance(fresh.NextCursor,
+            Sample(10, TimeSpan.FromSeconds(16), Geographic(outside), speed: 5, track: track));
+        Assert.Equal(PatternPhase.Downwind, confirmed.Result.State.ConfirmedPhase);
+    }
+
+    [Theory]
+    [InlineData(TrafficPatternSide.Left, false)]
+    [InlineData(TrafficPatternSide.Right, false)]
+    [InlineData(TrafficPatternSide.Left, true)]
+    [InlineData(TrafficPatternSide.Right, true)]
+    public void DownwindCompetingEntryOrBaseEvidenceResetsCandidate(TrafficPatternSide side, bool baseOverlap)
+    {
+        var context = Context(Configuration(side, enterTolerance: 50, exitTolerance: 60));
+        var crosswind = ConfirmCrosswind(context);
+        var pending = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        var geometry = context.Configuration.GeometryAuthority.Geometry!;
+        var sign = side == TrafficPatternSide.Left ? -1 : 1;
+        var position = baseOverlap ? new RunwayCoordinate(-800, sign * 800) : geometry.EntryJoinTarget;
+        var track = baseOverlap ? sign < 0 ? 135d : 225d : sign < 0 ? 157.5 : 202.5;
+        var sample = Sample(8, TimeSpan.FromSeconds(14), Geographic(position), speed: 5, track: track);
+        var evidence = GeometryMovementEvidence.Evaluate(context.Configuration, sample, 5);
+        Assert.False(evidence.Crosswind.InsideExitBounds);
+        Assert.True(evidence.Downwind.InsideEnterBounds);
+        Assert.Equal(DirectionEvidenceStatus.WithinEnterTolerance, evidence.Downwind.Direction.Status);
+        var competing = baseOverlap ? evidence.Base : evidence.Entry;
+        Assert.True(competing.InsideEnterBounds);
+        Assert.Equal(DirectionEvidenceStatus.WithinEnterTolerance, competing.Direction.Status);
+        var held = context.Advance(pending.NextCursor, sample);
+        Assert.Equal(PatternPhase.Crosswind, held.Result.State.ConfirmedPhase);
+        Assert.Null(held.Result.State.Candidate);
+        Assert.Empty(held.Result.Transitions);
+    }
+
+    [Theory]
+    [InlineData("speed")]
+    [InlineData("track")]
+    [InlineData("ground-status")]
+    [InlineData("on-ground")]
+    [InlineData("low-speed")]
+    [InlineData("reverse-track")]
+    [InlineData("crosswind-track")]
+    [InlineData("exit-track")]
+    [InlineData("wrong-side")]
+    [InlineData("exit-bounds")]
+    public void DownwindTransientOrInsufficientEvidenceHoldsCrosswindAndRestartsCandidate(string failure)
+    {
+        var context = Context(Configuration());
+        var crosswind = ConfirmCrosswind(context);
+        var pending = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        var midpoint = Midpoint(context.Configuration.GeometryAuthority.Geometry!.Downwind.Axis);
+        var position = failure == "wrong-side" ? new RunwayCoordinate(midpoint.AlongTrackMetres, -midpoint.CrossTrackMetres)
+            : failure == "exit-bounds" ? new RunwayCoordinate(midpoint.AlongTrackMetres, midpoint.CrossTrackMetres - 65)
+            : midpoint;
+        var sample = Sample(8, TimeSpan.FromSeconds(13), Geographic(position),
+            speed: failure == "speed" ? null : failure == "low-speed" ? 4.999 : 5,
+            track: failure == "track" ? null : failure == "reverse-track" ? 0 : failure == "crosswind-track" ? 270
+                : failure == "exit-track" ? 200 : 180,
+            onGround: failure == "ground-status" ? null : failure == "on-ground");
+        if (failure == "exit-bounds")
+        {
+            var evidence = GeometryMovementEvidence.Evaluate(context.Configuration, sample, 5);
+            Assert.False(evidence.Downwind.InsideEnterBounds);
+            Assert.True(evidence.Downwind.InsideExitBounds);
+        }
+        var held = context.Advance(pending.NextCursor, sample);
+        Assert.Equal(DetectionCycleOutcome.Accepted, held.Result.Outcome);
+        Assert.Equal(PatternPhase.Crosswind, held.Result.State.ConfirmedPhase);
+        Assert.Equal(crosswind.Result.State.AttemptId, held.Result.State.AttemptId);
+        Assert.Null(held.Result.State.Candidate);
+        Assert.Null(held.Result.State.RunwayContact);
+        Assert.Empty(held.Result.Transitions);
+        var fresh = context.Advance(held.NextCursor, DownwindSample(context, 9, 14));
+        Assert.Equal(TimeSpan.FromSeconds(14), fresh.Result.State.Candidate!.FirstSourceTime);
+        Assert.Empty(fresh.Result.Transitions);
+        var confirmed = context.Advance(fresh.NextCursor, DownwindSample(context, 10, 16));
+        Assert.Equal(PatternPhase.Downwind, confirmed.Result.State.ConfirmedPhase);
+    }
+
+    [Fact]
+    public void DownwindCandidateAndSampleGapBoundariesMatchExistingRules()
+    {
+        var context = Context(Configuration(persistence: TimeSpan.FromSeconds(6)));
+        var crosswind = ConfirmCrosswind(context);
+        var sequence = crosswind.Result.Snapshot.SampleSequence + 1;
+        var time = crosswind.Result.Snapshot.SourceTime.TotalSeconds + 1;
+        var pending = context.Advance(crosswind.NextCursor, DownwindSample(context, sequence, time));
+        var exact = context.Advance(pending.NextCursor, DownwindSample(context, sequence + 1, time + 4));
+        Assert.Equal((uint)2, exact.Result.State.Candidate!.SampleCount);
+        var point = Point(context.Configuration, PatternPhase.Downwind).Position;
+        var beyond = context.Advance(pending.NextCursor, Sample(sequence + 1,
+            TimeSpan.FromSeconds(time + 4) + TimeSpan.FromTicks(1), point, speed: 5, track: 180));
+        Assert.Equal((uint)1, beyond.Result.State.Candidate!.SampleCount);
+        Assert.Equal(beyond.Result.Snapshot.SourceTime, beyond.Result.State.Candidate.FirstSourceTime);
+        var confirmed = context.Advance(exact.NextCursor, DownwindSample(context, sequence + 2, time + 6));
+        Assert.Equal(PatternPhase.Downwind, confirmed.Result.State.ConfirmedPhase);
+        var maximum = context.Advance(pending.NextCursor, DownwindSample(context, sequence + 1, time + 10));
+        Assert.Equal(DetectionCycleOutcome.Accepted, maximum.Result.Outcome);
+        Assert.Equal((uint)1, maximum.Result.State.Candidate!.SampleCount);
+        var gap = context.Advance(pending.NextCursor, Sample(sequence + 1,
+            TimeSpan.FromSeconds(time + 10) + TimeSpan.FromTicks(1), point, speed: 5, track: 180));
+        Assert.Equal(DetectionCycleOutcome.Interrupted, gap.Result.Outcome);
+        Assert.Equal(PatternPhase.Crosswind, gap.Result.State.ConfirmedPhase);
+        Assert.Null(gap.Result.State.Candidate);
+    }
+
+    [Theory]
+    [InlineData("position")]
+    [InlineData("gap")]
+    [InlineData("both")]
+    public void DownwindInterruptionClearsCandidateButRetainsPhaseAndAttempt(string failure)
+    {
+        var context = Context(Configuration());
+        var crosswind = ConfirmCrosswind(context);
+        var pending = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        var time = failure == "position" ? 13 : 23;
+        var interrupted = context.Advance(pending.NextCursor,
+            DownwindSample(context, 8, time, positionAvailable: failure == "gap"));
+        Assert.Equal(DetectionCycleOutcome.Interrupted, interrupted.Result.Outcome);
+        Assert.Equal(failure == "position" ? SampleInterruptionReason.PositionContinuityLost :
+            SampleInterruptionReason.SampleContinuityGap, interrupted.Result.InterruptionReason);
+        Assert.Equal(PatternPhase.Crosswind, interrupted.Result.State.ConfirmedPhase);
+        Assert.Equal(crosswind.Result.State.AttemptId, interrupted.Result.State.AttemptId);
+        Assert.Equal((uint)2, interrupted.Result.State.TransitionCount);
+        Assert.Equal((ulong)8, interrupted.Result.State.LastSampleSequence);
+        Assert.Equal(TimeSpan.FromSeconds(time), interrupted.Result.State.LastSourceTime);
+        Assert.Equal(pending.Result.State.LastAcceptedPosition, interrupted.Result.State.LastAcceptedPosition);
+        Assert.Equal(PositionContinuity.Interrupted, interrupted.Result.State.PositionContinuity);
+        Assert.Null(interrupted.Result.State.Candidate);
+        Assert.Empty(interrupted.Result.Transitions);
+        var midpoint = Midpoint(context.Configuration.GeometryAuthority.Geometry!.Downwind.Axis);
+        var shifted = new RunwayCoordinate(midpoint.AlongTrackMetres + 20, midpoint.CrossTrackMetres);
+        var fresh = context.Advance(interrupted.NextCursor, DownwindSample(context, 9, time, point: shifted));
+        Assert.Equal(DetectionCycleOutcome.Accepted, fresh.Result.Outcome);
+        Assert.Equal((uint)1, fresh.Result.State.Candidate!.SampleCount);
+        Assert.Equal(TimeSpan.FromSeconds(time), fresh.Result.State.Candidate.FirstSourceTime);
+        Assert.Equal(PositionContinuity.Continuous, fresh.Result.State.PositionContinuity);
+        var confirmed = context.Advance(fresh.NextCursor, DownwindSample(context, 10, time + 2, point: shifted));
+        Assert.Equal(PatternPhase.Downwind, confirmed.Result.State.ConfirmedPhase);
+    }
+
+    [Fact]
+    public void DownwindRejectedSamplesPreserveCandidateAndConfirmationIdentity()
+    {
+        var context = Context(Configuration());
+        var crosswind = ConfirmCrosswind(context);
+        var pending = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        var point = Point(context.Configuration, PatternPhase.Downwind).Position;
+        var midpoint = Midpoint(context.Configuration.GeometryAuthority.Geometry!.Downwind.Axis);
+        var cases = new[]
+        {
+            (Sample(7, TimeSpan.FromSeconds(11), null, epoch: "other"), SampleRejectionReason.EpochMismatch),
+            (Sample(7, TimeSpan.FromSeconds(11), null), SampleRejectionReason.DuplicateSequence),
+            (Sample(6, TimeSpan.FromSeconds(11), point), SampleRejectionReason.ReversedSequence),
+            (Sample(8, TimeSpan.FromSeconds(11), point), SampleRejectionReason.ReversedSourceTime),
+            (Sample(8, TimeSpan.FromSeconds(13), Geographic(new(100_000, 0))), SampleRejectionReason.ImplausibleRelocation),
+            (DownwindSample(context, 8, 12, point: new(midpoint.AlongTrackMetres + 1, midpoint.CrossTrackMetres)),
+                SampleRejectionReason.ImplausibleRelocation)
+        };
+        foreach (var (sample, reason) in cases)
+        {
+            var rejected = context.Advance(pending.NextCursor, sample);
+            Assert.Equal(DetectionCycleOutcome.Rejected, rejected.Result.Outcome);
+            Assert.Equal(reason, rejected.Result.RejectionReason);
+            var prior = pending.Result.State;
+            Assert.Equal(new PhaseDetectionState(prior.AlgorithmId, prior.ConfigurationId, prior.StreamEpoch,
+                prior.LastSampleSequence, prior.LastSourceTime, prior.ConfirmedPhase, prior.AttemptId, prior.Candidate,
+                prior.TransitionCount, prior.RejectedSampleCount + 1, prior.CueLatches,
+                prior.LastAcceptedPosition, prior.PositionContinuity), rejected.Result.State);
+            Assert.Empty(rejected.Result.QualityIssues);
+            Assert.Empty(rejected.Result.Transitions);
+            Assert.Empty(rejected.Result.Cues);
+            var resumed = context.Advance(rejected.NextCursor, DownwindSample(context, 8, 14));
+            Assert.Equal(PatternPhase.Downwind, resumed.Result.State.ConfirmedPhase);
+            Assert.Equal(crosswind.Result.State.AttemptId, resumed.Result.State.AttemptId);
+            Assert.Equal(new DetectionEventIdentity("algorithm", "config", "epoch", 8, 0),
+                Assert.Single(resumed.Result.Transitions).Identity);
+            Assert.Equal((uint)1, resumed.Result.State.RejectedSampleCount);
+        }
+    }
+
+    [Theory]
+    [InlineData(TrafficPatternSide.Left)]
+    [InlineData(TrafficPatternSide.Right)]
+    public void DownwindIntegrationDoesNotAuthorizeInitialSkippedOrReverseTransitions(TrafficPatternSide side)
+    {
+        var context = Context(Configuration(side));
+        var initial = context.Advance(context.Start(), DownwindSample(context, 1, 0));
+        var initialAgain = context.Advance(initial.NextCursor, DownwindSample(context, 2, 2));
+        Assert.Equal(PatternPhase.Unknown, initialAgain.Result.State.ConfirmedPhase);
+        Assert.Null(initialAgain.Result.State.Candidate);
+        var crosswind = ConfirmCrosswind(context);
+        var pending = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        var downwind = context.Advance(pending.NextCursor, DownwindSample(context, 8, 14));
+        var cursor = downwind.NextCursor;
+        var samples = new[]
+        {
+            CrosswindSample(context, 9, 15), CrosswindSample(context, 10, 17),
+            DepartureSample(11, 18), DepartureSample(12, 20),
+            Sample(13, TimeSpan.FromSeconds(21), Point(context.Configuration, PatternPhase.Entry).Position,
+                track: Point(context.Configuration, PatternPhase.Entry).Track),
+            Sample(14, TimeSpan.FromSeconds(23), Point(context.Configuration, PatternPhase.Final).Position, track: 0)
+        };
+        foreach (var sample in samples)
+        {
+            var held = context.Advance(cursor, sample);
+            Assert.Equal(PatternPhase.Downwind, held.Result.State.ConfirmedPhase);
+            Assert.Equal(downwind.Result.State.AttemptId, held.Result.State.AttemptId);
+            Assert.Equal((uint)3, held.Result.State.TransitionCount);
+            Assert.Null(held.Result.State.Candidate);
+            Assert.Empty(held.Result.Transitions);
+            cursor = held.NextCursor;
+        }
+    }
+
+    [Theory]
+    [InlineData(TrafficPatternSide.Left)]
+    [InlineData(TrafficPatternSide.Right)]
+    public void OutboundReplayThroughFinalIsDeterministicAcrossRejectionAndInterruption(TrafficPatternSide side)
+    {
+        var config = Configuration(side);
+        var context = Context(config);
+        var basePoint = Point(config, PatternPhase.Base);
+        var finalPoint = Point(config, PatternPhase.Final);
+        var samples = new[]
+        {
+            DepartureSample(1, 0, onGround: true), DepartureSample(2, 3, onGround: true),
+            DepartureSample(3, 4), DepartureSample(4, 8), CrosswindSample(context, 5, 9), CrosswindSample(context, 6, 11),
+            DownwindSample(context, 7, 12), DownwindSample(context, 7, 12),
+            DownwindSample(context, 8, 13, positionAvailable: false),
+            DownwindSample(context, 9, 14), DownwindSample(context, 10, 16),
+            Sample(11, TimeSpan.FromSeconds(17), basePoint.Position, track: basePoint.Track),
+            Sample(12, TimeSpan.FromSeconds(19), basePoint.Position, track: basePoint.Track),
+            Sample(13, TimeSpan.FromSeconds(20), finalPoint.Position, track: finalPoint.Track),
+            Sample(14, TimeSpan.FromSeconds(22), finalPoint.Position, track: finalPoint.Track)
+        };
+        List<PhaseDetectionResult> Run(PhaseReplayContext owner)
+        {
+            var cursor = owner.Start();
+            var results = new List<PhaseDetectionResult>();
+            foreach (var sample in samples)
+            {
+                var step = owner.Advance(cursor, sample);
+                results.Add(step.Result);
+                cursor = step.NextCursor;
+            }
+            return results;
+        }
+        var first = Run(context);
+        foreach (var again in new[] { Run(context), Run(Context(config)) })
+            for (var i = 0; i < first.Count; i++)
+            {
+                Assert.Equal(first[i].State, again[i].State);
+                Assert.Equal(first[i].Outcome, again[i].Outcome);
+                Assert.Equal(first[i].RejectionReason, again[i].RejectionReason);
+                Assert.Equal(first[i].InterruptionReason, again[i].InterruptionReason);
+                Assert.Equal(first[i].QualityIssues, again[i].QualityIssues);
+                Assert.Equal(first[i].Transitions, again[i].Transitions);
+                Assert.Equal(first[i].Cues, again[i].Cues);
+            }
+        Assert.Equal(PatternPhase.Final, first[^1].State.ConfirmedPhase);
+        Assert.Equal((uint)5, first[^1].State.TransitionCount);
+        Assert.Equal((uint)1, first[^1].State.RejectedSampleCount);
+        Assert.Equal(new DetectionAttemptIdentity("algorithm", "config", "epoch", 4), first[^1].State.AttemptId);
+        Assert.Equal(new ulong[] { 4, 6, 10, 12, 14 }, first.SelectMany(result => result.Transitions)
+            .Select(transition => transition.Identity.SampleSequence));
+        Assert.All(first.SelectMany(result => result.Transitions), transition =>
+        {
+            Assert.Equal((uint)0, transition.Identity.Ordinal);
+            Assert.Equal(first[^1].State.AttemptId, transition.AttemptId);
+        });
+        var crosswind = ConfirmCrosswind(context);
+        var branchA = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
+        var branchB = context.Advance(crosswind.NextCursor, DownwindSample(context, 7, 12));
         Assert.Equal(branchA.Result.State, branchB.Result.State);
     }
 }
