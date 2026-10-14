@@ -652,6 +652,103 @@ public sealed class DeterministicPhaseTransitionTests
         Assert.Equal(PatternPhase.Departure, lift.Result.State.Candidate?.Phase);
     }
 
+    [Theory]
+    [InlineData("candidate-gap")]
+    [InlineData("above-candidate-gap")]
+    [InlineData("sample-gap")]
+    public void FirstQualifyingLiftoffAfterEstablishedGateRespectsSampleGap(string boundary)
+    {
+        var context = Context(Configuration());
+        var policy = context.Configuration.Policy;
+        var first = context.Advance(context.Start(),
+            Sample(1, TimeSpan.Zero, Geographic(new(500, 0)), onGround: true));
+        var gate = context.Advance(first.NextCursor,
+            Sample(2, policy.GroundContactPersistence, Geographic(new(500, 0)), onGround: true));
+        Assert.Equal(DetectionCycleOutcome.Accepted, gate.Result.Outcome);
+        Assert.Equal(policy.GroundContactPersistence,
+            gate.Result.State.RunwayContact!.LastSourceTime - gate.Result.State.RunwayContact.FirstSourceTime);
+
+        var gap = boundary switch
+        {
+            "candidate-gap" => policy.MaximumCandidateGap,
+            "above-candidate-gap" => policy.MaximumCandidateGap + TimeSpan.FromTicks(1),
+            "sample-gap" => policy.MaximumSampleGap,
+            _ => throw new ArgumentOutOfRangeException(nameof(boundary))
+        };
+        var liftoffTime = gate.Result.Snapshot.SourceTime + gap;
+        var lift = context.Advance(gate.NextCursor,
+            Sample(3, liftoffTime, Geographic(new(500, 0)),
+                speed: policy.DepartureMinimumSpeedMetresPerSecond,
+                track: 0, climb: policy.DepartureMinimumClimbMetresPerSecond));
+        Assert.Equal(DetectionCycleOutcome.Accepted, lift.Result.Outcome);
+        Assert.Equal(PatternPhase.Unknown, lift.Result.State.ConfirmedPhase);
+        Assert.Equal(PatternPhase.Departure, lift.Result.State.Candidate?.Phase);
+        Assert.Equal(liftoffTime, lift.Result.State.Candidate!.FirstSourceTime);
+        Assert.Equal((uint)1, lift.Result.State.Candidate.SampleCount);
+        Assert.Equal(gate.Result.State.RunwayContact, lift.Result.State.RunwayContact);
+        Assert.Null(lift.Result.State.AttemptId);
+        Assert.Empty(lift.Result.Transitions);
+        Assert.Empty(lift.Result.Cues);
+
+        var confirmation = context.Advance(lift.NextCursor,
+            Sample(4, liftoffTime + policy.DeparturePersistence, Geographic(new(500, 0)),
+                speed: policy.DepartureMinimumSpeedMetresPerSecond,
+                track: 0, climb: policy.DepartureMinimumClimbMetresPerSecond));
+        Assert.Equal(DetectionCycleOutcome.Accepted, confirmation.Result.Outcome);
+        Assert.Equal(PatternPhase.Departure, confirmation.Result.State.ConfirmedPhase);
+        var transition = Assert.Single(confirmation.Result.Transitions);
+        Assert.Equal(PatternPhase.Unknown, transition.From);
+        Assert.Equal(PatternPhase.Departure, transition.To);
+    }
+
+    [Fact]
+    public void AcceleratingMovingRunwayRollCannotConfirmDepartureBeforeLiftoff()
+    {
+        var context = Context(Configuration());
+        var policy = context.Configuration.Policy;
+        var cursor = context.Start();
+        var along = context.Configuration.RunwayContactEnvelope.MinimumAlongTrackMetres +
+            context.Configuration.GeometryAuthority.RunwayReference.RunwayLength.Metres / 10;
+        var priorSpeed = 0d;
+        var cadence = TimeSpan.FromSeconds(1);
+        PhaseDetectionResult? lastGround = null;
+
+        for (var index = 0; index < 8; index++)
+        {
+            var speed = policy.DepartureMinimumSpeedMetresPerSecond * index / 4d;
+            if (index > 0) along += (priorSpeed + speed) / 2 * cadence.TotalSeconds;
+            var step = context.Advance(cursor,
+                Sample((ulong)index + 1, cadence * index, Geographic(new(along, 0)),
+                    speed: speed, track: 0, onGround: true,
+                    climb: policy.DepartureMinimumClimbMetresPerSecond));
+            Assert.Equal(DetectionCycleOutcome.Accepted, step.Result.Outcome);
+            Assert.True(GeometryMovementEvidence.Evaluate(context.Configuration, step.Result.Snapshot,
+                context.MinimumUsableGroundSpeedMetresPerSecond).InsideRunwayContactEnvelope);
+            Assert.Equal(PatternPhase.Unknown, step.Result.State.ConfirmedPhase);
+            Assert.Null(step.Result.State.Candidate);
+            Assert.Null(step.Result.State.AttemptId);
+            Assert.Empty(step.Result.Transitions);
+            Assert.Empty(step.Result.Cues);
+            cursor = step.NextCursor;
+            lastGround = step.Result;
+            priorSpeed = speed;
+        }
+
+        Assert.True(priorSpeed > policy.DepartureMinimumSpeedMetresPerSecond);
+        Assert.True(priorSpeed > policy.GroundContactMaximumSpeedMetresPerSecond);
+        Assert.True(lastGround!.State.RunwayContact!.LastSourceTime -
+            lastGround.State.RunwayContact.FirstSourceTime >= policy.GroundContactPersistence);
+        var lift = context.Advance(cursor,
+            Sample(lastGround.Snapshot.SampleSequence + 1, lastGround.Snapshot.SourceTime + cadence,
+                Geographic(new(along + priorSpeed * cadence.TotalSeconds, 0)),
+                speed: priorSpeed, track: 0, onGround: false,
+                climb: policy.DepartureMinimumClimbMetresPerSecond));
+        Assert.Equal(DetectionCycleOutcome.Accepted, lift.Result.Outcome);
+        Assert.Equal(PatternPhase.Unknown, lift.Result.State.ConfirmedPhase);
+        Assert.Equal(PatternPhase.Departure, lift.Result.State.Candidate?.Phase);
+        Assert.Empty(lift.Result.Transitions);
+    }
+
     [Fact]
     public void DepartureContactGapRestartsOnlyBeforeGateQualification()
     {
