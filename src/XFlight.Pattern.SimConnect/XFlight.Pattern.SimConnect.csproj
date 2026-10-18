@@ -4,11 +4,29 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <Msfs2024SdkRoot Condition="'$(Msfs2024SdkRoot)' == '' and '$(MSFS2024_SDK)' != ''">$(MSFS2024_SDK)</Msfs2024SdkRoot>
+    <Msfs2024SdkRoot Condition="'$(Msfs2024SdkRoot)' == ''">C:\MSFS 2024 SDK</Msfs2024SdkRoot>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\XFlight.Pattern.Core\XFlight.Pattern.Core.csproj" />
     <ProjectReference Include="..\XFlight.Pattern.Telemetry\XFlight.Pattern.Telemetry.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.FlightSimulator.SimConnect">
+      <HintPath>$(Msfs2024SdkRoot)\SimConnect SDK\lib\managed\Microsoft.FlightSimulator.SimConnect.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <None Include="$(Msfs2024SdkRoot)\SimConnect SDK\lib\SimConnect.dll"
+          Link="SimConnect.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <InternalsVisibleTo Include="XFlight.Pattern.Integration.Tests" />
+  </ItemGroup>
+
+  <Target Name="VerifySimConnectSdk" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(Msfs2024SdkRoot)\SimConnect SDK\lib\managed\Microsoft.FlightSimulator.SimConnect.dll') or !Exists('$(Msfs2024SdkRoot)\SimConnect SDK\lib\SimConnect.dll')"
+           Text="Official MSFS 2024 SimConnect SDK DLLs are required. Set Msfs2024SdkRoot or MSFS2024_SDK to the SDK root." />
+  </Target>
 
 </Project>
