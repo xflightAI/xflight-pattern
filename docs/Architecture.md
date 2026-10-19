@@ -4,9 +4,9 @@
 
 **XFlight Pattern — VFR Traffic Pattern Assistant for MSFS 2024**
 
-XFlight Pattern is a local Windows application for VFR traffic-pattern training with Microsoft Flight Simulator 2024. Version 0.1.0 targets a Cessna 172 reference aircraft, simulator telemetry, weather inputs, training guidance, deterministic debriefing, and session record/replay.
+XFlight Pattern is a local Windows application for VFR traffic-pattern training with Microsoft Flight Simulator 2024. Version 0.1.0 targets a Cessna 172 reference aircraft, simulator telemetry, weather inputs, training guidance, deterministic debriefing, and session record/replay. These targets do not imply that the corresponding runtime features are implemented at M5-C1.
 
-M2 adds the circuit-definition domain after the M1 airport/weather domain and R1 runway recommendation calculation. M3 adds static horizontal pattern geometry and the authorized 45-degree entry, without runtime integrations, detection, coaching, scoring, replay, or product UI.
+M2 adds the circuit-definition domain after the M1 airport/weather domain and R1 runway recommendation calculation. M3 adds static horizontal pattern geometry and the authorized 45-degree entry. M4 adds bounded deterministic phase detection and an origin-only offline replay boundary. M5-B adds raw telemetry contracts, normalization, and a fake source. M5-C1 adds a real SimConnect connection lifecycle, but no simulator-variable subscription or live telemetry acquisition.
 
 ## Frozen principles
 
@@ -26,9 +26,9 @@ Active Sky FS is a Version 0.1.0 integration target, but it is optional at runti
 
 | Project | Responsibility |
 | --- | --- |
-| `XFlight.Pattern.Core` | Simulator-independent deterministic domain and application logic. |
-| `XFlight.Pattern.Telemetry` | Normalized telemetry contracts and processing boundary; no WPF dependency. |
-| `XFlight.Pattern.SimConnect` | SimConnect adapter boundary; simulator-specific types must not leak into Core. |
+| `XFlight.Pattern.Core` | Simulator-independent domain, geometry, bounded deterministic phase transitions, and origin-only replay context. |
+| `XFlight.Pattern.Telemetry` | Simulator-neutral raw contracts, pure raw-to-Core normalizer, source status, and manually driven fake; no WPF dependency. |
+| `XFlight.Pattern.SimConnect` | Windows x64 SDK connection lifecycle driven by the caller; simulator-specific types stay outside Core, and telemetry reads yield no samples. |
 | `XFlight.Pattern.ActiveSky` | Active Sky FS adapter boundary; provider-specific types must not leak into Core. |
 | `XFlight.Pattern.Infrastructure` | Infrastructure implementations only. |
 | `XFlight.Pattern.App` | WPF application and composition root. |
@@ -61,7 +61,21 @@ All seven horizontal dimensions are explicit positive distances stored in metres
 
 UNKNOWN side returns an explicit unavailable result. The source circuit and all side/altitude provenance remain intact, including unresolved altitude. ENU uses ellipsoid height zero solely for horizontal projection; it creates no target altitude or vertical limits. LEFT/RIGHT geometry mirrors exactly in runway coordinates. Outputs contain fixed named immutable values, with value equality and stable corner ordering.
 
-See [M3 Geometry](M3-Geometry.md) for precise bounds and validation. M4-or-later aircraft detection, turn timing, transition cues, coaching, wind correction, and telemetry processing require separate authority. Core remains free of external GIS packages and adapter dependencies.
+See [M3 Geometry](M3-Geometry.md) for precise bounds and validation. M4 consumes this geometry without changing it. Core remains free of external GIS packages and adapter dependencies.
+
+## M4 bounded phase detection
+
+Core evaluates closed horizontal region membership and direction evidence against the M3 runway frame. With explicit, caller-supplied policy and ordered normalized snapshots, its deterministic transition evaluates source-time persistence, quality, continuity, relocation, and ambiguity. The implemented paths are `Unknown → Entry → Downwind → Base → Final` and `Unknown → Departure → Crosswind → Downwind → Base → Final`. Departure requires sustained observed runway contact and qualifying airborne evidence; ground contact alone does not confirm it. A static Base Turn Window does not choose a turn point or emit a cue.
+
+`PhaseReplayContext.Start()` and `Advance(cursor, snapshot)` provide an origin-only, offline deterministic replay lineage with opaque cursors. They do not record or reproduce full flight sessions. The implemented detector emits no phase cues and has no confirmed outgoing transition from `Final`, `LandingRoll`, `GoAround`, or `Exited`. See [M4-B1 contracts](M4-Phase-Detection-Contracts.md), [M4-B2 evidence](M4-B2-Geometry-Membership.md), and the [M4-B4 approved contract](M4-B4-Departure-Crosswind.md).
+
+## M5 telemetry and SimConnect boundary
+
+M5-B defines simulator-neutral raw observations, source identity, stream epoch, sequence, source time, and independent monotonic receipt time. Its pure normalizer converts valid feet, knots, and feet-per-minute observations into Core units, preserves measured provenance, marks invalid individual observations unavailable, and rejects invalid sample identity or time. `FakeTelemetrySource` is single-threaded and manually driven; its connection and pause status does not create samples. See [M5-B Telemetry Boundary](M5-B-Telemetry-Boundary.md).
+
+M5-C1 uses the official MSFS 2024 SimConnect SDK on Windows x64. `Connect()` opens a session but reports `Connecting` until an `Open` callback is dispatched by caller-driven `Pump()`. `Quit` or an SDK/receive error closes the session; `Disconnect()` closes it explicitly, and `Dispose()` is terminal. SDK calls and callbacks are serialized, with no background worker. The adapter does not subscribe to simulator variables, and `TryRead` always returns no sample. The certified baseline reported **296/296 offline tests PASS**; the M5-C1 live test reported **PASS for observable connection lifecycle behavior**. Independent verification of native cleanup remains outstanding. These results were not rerun for this documentation update.
+
+Live telemetry acquisition, transition cues, coaching, scoring, an operational UI, complete flight-session recording/replay, live weather integration, and wind correction remain outside the implemented M5-C1 boundary.
 
 ## Dependency boundaries
 

@@ -1,5 +1,7 @@
 # M4-B4 — Departure & Crosswind Contract
 
+**Current status at the certified M5-C1 baseline (`bf3d1e69cca0d0e09838254c68d0cb2ac41cf2b4`):** The bounded B4 departure, crosswind, and downwind transitions and approved D1/D2/D3 rules below are implemented in Core. References below to a future implementation, the earlier baseline, and a proposed file manifest record the contract-freeze stage; they are retained as historical decisions, not current implementation status. The implementation does not add cue emission, go-around, landing-roll completion, exit detection, coaching, scoring, live telemetry acquisition, or flight-session recording.
+
 Status: **FROZEN for the bounded implementation defined below.** D1, D2 and D3 were explicitly approved by the user. This document specifies future behavior; the baseline implementation still supports only the inbound transition path. Documentation freeze does not authorize automatic implementation.
 
 ## Baseline and source authority
