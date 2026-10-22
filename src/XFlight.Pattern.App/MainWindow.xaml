@@ -2,8 +2,249 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="XFlight Pattern"
-        Height="450"
-        Width="800">
-    <Grid />
+        Width="1480" Height="940" MinWidth="1150" MinHeight="760"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource CanvasBrush}" FontFamily="Segoe UI">
+    <Border BorderBrush="{StaticResource PanelEdgeBrush}" BorderThickness="1"
+            Background="{StaticResource CanvasBrush}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="78" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Vector A1 mark; no bitmap asset is required. -->
+            <Border Background="{StaticResource HeaderBrush}"
+                    BorderBrush="{StaticResource PanelEdgeBrush}" BorderThickness="0,0,0,1">
+                <Grid Margin="24,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="64" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Viewbox Width="56" Height="54" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Canvas Width="60" Height="58">
+                            <Path Data="M 6,5 L 19,5 L 30,21 L 42,5 L 55,5 L 38,28 L 56,53 L 43,53 L 30,36 L 18,53 L 5,53 L 22,28 Z"
+                                  Stroke="{StaticResource TurquoiseBrush}" StrokeThickness="2.5"
+                                  Fill="Transparent" StrokeLineJoin="Miter" />
+                            <Path Data="M 16,11 L 30,29 L 45,11 M 16,47 L 30,29 L 45,47"
+                                  Stroke="{StaticResource TurquoiseBrush}" StrokeThickness="1.2" Opacity="0.65" />
+                        </Canvas>
+                    </Viewbox>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="12,0,0,0">
+                        <TextBlock FontSize="29" FontWeight="SemiBold" LineHeight="34">
+                            <Run Text="XFlight " Foreground="{StaticResource PrimaryTextBrush}" />
+                            <Run Text="Pattern" Foreground="{StaticResource TurquoiseBrush}" />
+                        </TextBlock>
+                        <TextBlock Text="AIRPORT TRAFFIC PATTERN AID" FontSize="12"
+                                   Foreground="{StaticResource SecondaryTextBrush}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="16,12,16,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="306" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="12" />
+                    <ColumnDefinition Width="280" />
+                </Grid.ColumnDefinitions>
+
+                <Grid Grid.Column="0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="226" />
+                        <RowDefinition Height="220" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Style="{StaticResource PanelCardStyle}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="AEROPORTO" />
+                            <TextBlock Grid.Row="1" Text="Non disponibile" FontSize="23" FontWeight="SemiBold"
+                                       Foreground="{StaticResource PrimaryTextBrush}" Margin="0,12,0,2" />
+                            <TextBlock Grid.Row="2" Style="{StaticResource SupportingTextStyle}"
+                                       Text="Nessun aeroporto selezionato" />
+                            <StackPanel Grid.Row="3" VerticalAlignment="Bottom">
+                                <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,0,0,9" />
+                                <Grid Margin="0,0,0,7">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="ICAO" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="—" />
+                                </Grid>
+                                <Grid Margin="0,0,0,7">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Pista selezionata" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="—" />
+                                </Grid>
+                                <Grid>
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Provenienza" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="—" />
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Style="{StaticResource PanelCardStyle}" Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="DATI PISTA" />
+                            <Border Grid.Row="1" BorderBrush="{StaticResource DividerBrush}"
+                                    BorderThickness="0,1,0,0" Margin="0,10,0,12" />
+                            <StackPanel Grid.Row="2">
+                                <Grid Margin="0,0,0,17">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Testata selezionata" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="—" />
+                                </Grid>
+                                <Grid Margin="0,0,0,17">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Testata opposta" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="—" />
+                                </Grid>
+                                <Grid Margin="0,0,0,17">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Lunghezza" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="—" />
+                                </Grid>
+                                <TextBlock Style="{StaticResource SupportingTextStyle}" Text="Dati pista non disponibili" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="2" Style="{StaticResource PanelCardStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="CIRCUITO" />
+                            <Border Grid.Row="1" BorderBrush="{StaticResource DividerBrush}"
+                                    BorderThickness="0,1,0,0" Margin="0,10,0,12" />
+                            <StackPanel Grid.Row="2">
+                                <Grid Margin="0,0,0,18">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Lato" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
+                                </Grid>
+                                <Grid Margin="0,0,0,18">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Quota circuito" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non risolta" />
+                                </Grid>
+                                <Grid Margin="0,0,0,18">
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Fonte" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
+                                </Grid>
+                                <Grid>
+                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Stato" />
+                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+
+                <Border Grid.Column="2" BorderBrush="{StaticResource PanelEdgeBrush}"
+                        BorderThickness="1" CornerRadius="9" ClipToBounds="True">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#082336" Offset="0" />
+                            <GradientStop Color="#031521" Offset="0.55" />
+                            <GradientStop Color="#071E2C" Offset="1" />
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Grid Margin="24,16">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="SCHEMA DEL CIRCUITO" TextAlignment="Center" FontSize="22"
+                                   FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+                        <TextBlock Grid.Row="1" Text="Nessun circuito disponibile" TextAlignment="Center"
+                                   FontSize="15" Margin="0,4,0,0" Foreground="{StaticResource TurquoiseBrush}" />
+                        <StackPanel Grid.Row="2" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Border Width="58" Height="58" CornerRadius="29" BorderThickness="1"
+                                    BorderBrush="{StaticResource PanelEdgeBrush}"
+                                    HorizontalAlignment="Center" Margin="0,0,0,20">
+                                <TextBlock Text="—" FontSize="30" FontWeight="Light"
+                                           Foreground="{StaticResource TurquoiseBrush}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <TextBlock Text="Schema non disponibile" TextAlignment="Center" FontSize="22"
+                                       FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
+                            <TextBlock Text="L'area del circuito è riservata alla rappresentazione della geometria selezionata."
+                                       Style="{StaticResource SupportingTextStyle}" TextAlignment="Center"
+                                       FontSize="15" Margin="0,10,0,0" />
+                        </StackPanel>
+                        <TextBlock Grid.Row="3" Text="SCHEMA ORIZZONTALE · DATI NON DISPONIBILI"
+                                   TextAlignment="Center" FontSize="11" Margin="0,0,0,2"
+                                   Foreground="{StaticResource MutedTextBrush}" />
+                    </Grid>
+                </Border>
+
+                <Grid Grid.Column="4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="132" />
+                        <RowDefinition Height="132" />
+                        <RowDefinition Height="180" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Style="{StaticResource PanelCardStyle}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="FASE ATTUALE" />
+                            <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,12" />
+                            <TextBlock Text="Non disponibile" FontSize="20" FontWeight="SemiBold"
+                                       Foreground="{StaticResource MutedTextBrush}" />
+                            <TextBlock Text="Nessuna fase confermata" Style="{StaticResource SupportingTextStyle}" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="1" Style="{StaticResource PanelCardStyle}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="PROSSIMA FASE" />
+                            <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,12" />
+                            <TextBlock Text="Non disponibile" FontSize="20" FontWeight="SemiBold"
+                                       Foreground="{StaticResource MutedTextBrush}" />
+                            <TextBlock Text="Nessuna fase indicata" Style="{StaticResource SupportingTextStyle}" Margin="0,4,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="2" Style="{StaticResource PanelCardStyle}" Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="QUOTA CIRCUITO" />
+                            <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,8,0,15" />
+                            <TextBlock Text="Non risolta" FontSize="21" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AmberBrush}" />
+                            <TextBlock Text="Nessuna quota circuito disponibile."
+                                       Style="{StaticResource SupportingTextStyle}" Margin="0,12,0,0" />
+                        </StackPanel>
+                    </Border>
+
+                    <Border Grid.Row="3" Style="{StaticResource PanelCardStyle}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="DISPONIBILITÀ" />
+                            <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,10,0,16" />
+                            <TextBlock Text="Dati aeroportuali" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBlock Text="Non disponibili" Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="15" Margin="0,3,0,16" />
+                            <TextBlock Text="Geometria del circuito" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBlock Text="Non disponibile" Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="15" Margin="0,3,0,16" />
+                            <TextBlock Text="Telemetria" Style="{StaticResource FieldLabelStyle}" />
+                            <TextBlock Text="Non disponibile" Foreground="{StaticResource MutedTextBrush}"
+                                       FontSize="15" Margin="0,3,0,0" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Grid>
+    </Border>
 </Window>
 
