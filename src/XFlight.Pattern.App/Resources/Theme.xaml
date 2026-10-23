@@ -42,9 +42,12 @@
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Foreground" Value="{StaticResource SecondaryTextBrush}" />
         <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
     <Style x:Key="FieldValueStyle" TargetType="TextBlock">
+        <Setter Property="Grid.Column" Value="1" />
+        <Setter Property="Margin" Value="10,0,0,0" />
         <Setter Property="FontFamily" Value="Segoe UI" />
         <Setter Property="FontSize" Value="14" />
         <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
@@ -54,6 +57,95 @@
 
     <Style x:Key="UnavailableValueStyle" TargetType="TextBlock" BasedOn="{StaticResource FieldValueStyle}">
         <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+    </Style>
+
+    <Style x:Key="UnresolvedValueStyle" TargetType="TextBlock" BasedOn="{StaticResource UnavailableValueStyle}">
+        <Setter Property="Foreground" Value="{StaticResource AmberBrush}" />
+    </Style>
+
+    <Style x:Key="PanelStateStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <Style x:Key="UnresolvedStateStyle" TargetType="TextBlock" BasedOn="{StaticResource PanelStateStyle}">
+        <Setter Property="Foreground" Value="{StaticResource AmberBrush}" />
+    </Style>
+
+    <Style x:Key="AvailabilityValueStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="Foreground" Value="{StaticResource MutedTextBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="0,3,0,16" />
+    </Style>
+
+    <!-- Restyle the existing vertical panel scrollbars; retain native scrolling commands. -->
+    <Style x:Key="PanelScrollTrackButtonStyle" TargetType="RepeatButton">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RepeatButton">
+                    <Border Background="Transparent" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Margin" Value="8,0,0,0" />
+        <Setter Property="Background" Value="{StaticResource HeaderBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                        <Track x:Name="PART_Track" Orientation="{TemplateBinding Orientation}"
+                               IsDirectionReversed="True" Minimum="{TemplateBinding Minimum}"
+                               Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value}"
+                               ViewportSize="{TemplateBinding ViewportSize}">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource PanelScrollTrackButtonStyle}"
+                                              Command="{x:Static ScrollBar.PageUpCommand}" />
+                            </Track.DecreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb>
+                                    <Thumb.Style>
+                                        <Style TargetType="Thumb">
+                                            <Setter Property="Background" Value="{StaticResource MutedTextBrush}" />
+                                            <Setter Property="Opacity" Value="0.7" />
+                                            <Setter Property="MinHeight" Value="20" />
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Thumb">
+                                                        <Border Background="{TemplateBinding Background}" CornerRadius="4" />
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource TurquoiseBrush}" />
+                                                    <Setter Property="Opacity" Value="1" />
+                                                </Trigger>
+                                                <Trigger Property="IsDragging" Value="True">
+                                                    <Setter Property="Background" Value="{StaticResource TurquoiseBrush}" />
+                                                    <Setter Property="Opacity" Value="1" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Thumb.Style>
+                                </Thumb>
+                            </Track.Thumb>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Style="{StaticResource PanelScrollTrackButtonStyle}"
+                                              Command="{x:Static ScrollBar.PageDownCommand}" />
+                            </Track.IncreaseRepeatButton>
+                        </Track>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="SupportingTextStyle" TargetType="TextBlock">
