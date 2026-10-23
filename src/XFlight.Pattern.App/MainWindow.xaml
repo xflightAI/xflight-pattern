@@ -1,6 +1,7 @@
 <Window x:Class="XFlight.Pattern.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:XFlight.Pattern.App.Controls"
         Title="XFlight Pattern"
         Width="1480" Height="940" MinWidth="1150" MinHeight="760"
         WindowStartupLocation="CenterScreen"
@@ -160,35 +161,7 @@
                             <GradientStop Color="#071E2C" Offset="1" />
                         </LinearGradientBrush>
                     </Border.Background>
-                    <Grid Margin="24,16">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Text="SCHEMA DEL CIRCUITO" TextAlignment="Center" FontSize="22"
-                                   FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
-                        <TextBlock Grid.Row="1" Text="Nessun circuito disponibile" TextAlignment="Center"
-                                   FontSize="15" Margin="0,4,0,0" Foreground="{StaticResource TurquoiseBrush}" />
-                        <StackPanel Grid.Row="2" Width="420" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <Border Width="58" Height="58" CornerRadius="29" BorderThickness="1"
-                                    BorderBrush="{StaticResource PanelEdgeBrush}"
-                                    HorizontalAlignment="Center" Margin="0,0,0,20">
-                                <TextBlock Text="—" FontSize="30" FontWeight="Light"
-                                           Foreground="{StaticResource TurquoiseBrush}"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="Schema non disponibile" TextAlignment="Center" FontSize="22"
-                                       FontWeight="SemiBold" Foreground="{StaticResource PrimaryTextBrush}" />
-                            <TextBlock Text="L'area del circuito è riservata alla rappresentazione della geometria selezionata."
-                                       Style="{StaticResource SupportingTextStyle}" TextAlignment="Center"
-                                       FontSize="15" Margin="0,10,0,0" />
-                        </StackPanel>
-                        <TextBlock Grid.Row="3" Text="SCHEMA ORIZZONTALE · DATI NON DISPONIBILI"
-                                   TextAlignment="Center" FontSize="11" Margin="0,0,0,2"
-                                   Foreground="{StaticResource MutedTextBrush}" />
-                    </Grid>
+                    <controls:PatternDiagram x:Name="CircuitDiagram" Margin="12" />
                 </Border>
 
                 <Grid Grid.Column="4">
