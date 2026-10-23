@@ -126,24 +126,27 @@
                             <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="CIRCUITO" />
                             <Border Grid.Row="1" BorderBrush="{StaticResource DividerBrush}"
                                     BorderThickness="0,1,0,0" Margin="0,10,0,12" />
-                            <StackPanel Grid.Row="2">
-                                <Grid Margin="0,0,0,18">
-                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Lato" />
-                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
-                                </Grid>
-                                <Grid Margin="0,0,0,18">
-                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Quota circuito" />
-                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non risolta" />
-                                </Grid>
-                                <Grid Margin="0,0,0,18">
-                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Fonte" />
-                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
-                                </Grid>
-                                <Grid>
-                                    <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Stato" />
-                                    <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
-                                </Grid>
-                            </StackPanel>
+                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <Grid Margin="0,0,0,18">
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Lato" />
+                                        <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,18">
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Quota circuito" />
+                                        <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non risolta" />
+                                    </Grid>
+                                    <Grid Margin="0,0,0,18">
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Fonte" />
+                                        <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
+                                    </Grid>
+                                    <Grid>
+                                        <TextBlock Style="{StaticResource FieldLabelStyle}" Text="Stato" />
+                                        <TextBlock Style="{StaticResource UnavailableValueStyle}" Text="Non disponibile" />
+                                    </Grid>
+                                </StackPanel>
+                            </ScrollViewer>
                         </Grid>
                     </Border>
                 </Grid>
@@ -228,19 +231,30 @@
                     </Border>
 
                     <Border Grid.Row="3" Style="{StaticResource PanelCardStyle}">
-                        <StackPanel>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
                             <TextBlock Style="{StaticResource PanelHeadingStyle}" Text="DISPONIBILITÀ" />
-                            <Border BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0" Margin="0,10,0,16" />
-                            <TextBlock Text="Dati aeroportuali" Style="{StaticResource FieldLabelStyle}" />
-                            <TextBlock Text="Non disponibili" Foreground="{StaticResource MutedTextBrush}"
-                                       FontSize="15" Margin="0,3,0,16" />
-                            <TextBlock Text="Geometria del circuito" Style="{StaticResource FieldLabelStyle}" />
-                            <TextBlock Text="Non disponibile" Foreground="{StaticResource MutedTextBrush}"
-                                       FontSize="15" Margin="0,3,0,16" />
-                            <TextBlock Text="Telemetria" Style="{StaticResource FieldLabelStyle}" />
-                            <TextBlock Text="Non disponibile" Foreground="{StaticResource MutedTextBrush}"
-                                       FontSize="15" Margin="0,3,0,0" />
-                        </StackPanel>
+                            <Border Grid.Row="1" BorderBrush="{StaticResource DividerBrush}"
+                                    BorderThickness="0,1,0,0" Margin="0,10,0,16" />
+                            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
+                                          HorizontalScrollBarVisibility="Disabled">
+                                <StackPanel>
+                                    <TextBlock Text="Dati aeroportuali" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBlock Text="Non disponibili" Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="15" Margin="0,3,0,16" />
+                                    <TextBlock Text="Geometria del circuito" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBlock Text="Non disponibile" Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="15" Margin="0,3,0,16" />
+                                    <TextBlock Text="Telemetria" Style="{StaticResource FieldLabelStyle}" />
+                                    <TextBlock Text="Non disponibile" Foreground="{StaticResource MutedTextBrush}"
+                                               FontSize="15" Margin="0,3,0,0" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
                     </Border>
                 </Grid>
             </Grid>
