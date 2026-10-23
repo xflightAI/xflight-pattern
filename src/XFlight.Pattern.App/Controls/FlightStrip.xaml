@@ -1,0 +1,156 @@
+<UserControl x:Class="XFlight.Pattern.App.Controls.FlightStrip"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:XFlight.Pattern.App.Controls"
+             x:Name="Strip" FontFamily="Segoe UI"
+             AutomationProperties.Name="{Binding AccessibleSummary, ElementName=Strip}">
+    <UserControl.Resources>
+        <!-- Native vector interpretation of the selected A1 racetrack mark. -->
+        <DataTemplate x:Key="A1Identity">
+            <Viewbox Stretch="Uniform">
+                <Grid Width="220" Height="54">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="60" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Viewbox Width="52" Height="50" HorizontalAlignment="Left">
+                        <Canvas Width="64" Height="62">
+                            <Path Data="M 12,8 L 43,8 C 64,8 65,29 48,36"
+                                  Stroke="{StaticResource TurquoiseBrush}"
+                                  StrokeThickness="9" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                                <Path.OpacityMask>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#00FFFFFF" Offset="0" />
+                                        <GradientStop Color="#FFFFFFFF" Offset="0.45" />
+                                    </LinearGradientBrush>
+                                </Path.OpacityMask>
+                            </Path>
+                            <Path Data="M 37,29 L 27,29 C 5,29 -1,49 15,57"
+                                  Stroke="{StaticResource TurquoiseBrush}" StrokeThickness="9"
+                                  StrokeStartLineCap="Round" />
+                            <Path Data="M 26,55 Q 46,53 57,37" Stroke="{StaticResource PrimaryTextBrush}"
+                                  StrokeThickness="1.8" StrokeDashArray="3,2" StrokeDashCap="Round" />
+                            <Ellipse Canvas.Left="44" Canvas.Top="31" Width="7" Height="7"
+                                     Fill="{StaticResource TurquoiseBrush}" />
+                        </Canvas>
+                    </Viewbox>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
+                        <TextBlock Text="XFLIGHT" FontSize="15" FontWeight="SemiBold"
+                                   Foreground="{StaticResource PrimaryTextBrush}" />
+                        <TextBlock Text="PATTERN" FontSize="24" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TurquoiseBrush}" Margin="0,-3,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Viewbox>
+        </DataTemplate>
+        <Style x:Key="StripLabel" TargetType="TextBlock" BasedOn="{StaticResource FieldLabelStyle}">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+        <Style x:Key="StripValue" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource PrimaryTextBrush}" />
+        </Style>
+        <DataTemplate x:Key="CompactLayout">
+            <Grid Margin="20,12,20,15" DataContext="{Binding RelativeSource={RelativeSource AncestorType={x:Type local:FlightStrip}}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="58" />
+                    <RowDefinition Height="17" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <ContentControl Content="A1" ContentTemplate="{StaticResource A1Identity}"
+                                Width="220" Height="54" HorizontalAlignment="Left" />
+                <TextBlock Text="FLIGHT STRIP" Style="{StaticResource StripLabel}"
+                           HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,9,0,0" />
+                <Border Grid.Row="1" Height="1" Background="{StaticResource DividerBrush}"
+                        VerticalAlignment="Top" Margin="0,7,0,0" />
+                <Border Grid.Row="1" Height="3" Width="64" CornerRadius="1.5"
+                        Background="{StaticResource AmberBrush}" HorizontalAlignment="Left"
+                        VerticalAlignment="Top" Margin="0,5,0,0" />
+                <Grid Grid.Row="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="112" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="142" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel ToolTip="Testata pista selezionata.">
+                        <TextBlock Text="RWY" Style="{StaticResource StripLabel}" />
+                        <TextBlock Text="{Binding RunwayText}" Style="{StaticResource StripValue}" />
+                    </StackPanel>
+                    <Border Grid.Column="1" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" Padding="18,0,0,0">
+                        <StackPanel ToolTip="Lato del circuito; distinto dalla fase.">
+                            <TextBlock Text="PATTERN" Style="{StaticResource StripLabel}" />
+                            <TextBlock Text="{Binding PatternText}" Style="{StaticResource StripValue}" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" Padding="18,0,0,0">
+                        <StackPanel ToolTip="Fase confermata, se disponibile.">
+                            <TextBlock Text="PHASE" Style="{StaticResource StripLabel}" />
+                            <TextBlock Text="{Binding PhaseText}" Style="{StaticResource StripValue}" FontSize="18" />
+                        </StackPanel>
+                    </Border>
+                    <Border Grid.Column="3" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" Padding="18,0,0,0">
+                        <StackPanel ToolTip="Quota circuito risolta in piedi MSL.">
+                            <TextBlock Text="PATTERN ALT" Style="{StaticResource StripLabel}" />
+                            <TextBlock Text="{Binding PatternAltitudeText}" Style="{StaticResource StripValue}" FontSize="18" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Grid>
+        </DataTemplate>
+        <DataTemplate x:Key="UltraMinimalLayout">
+            <Grid Margin="18,12" DataContext="{Binding RelativeSource={RelativeSource AncestorType={x:Type local:FlightStrip}}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="210" />
+                    <ColumnDefinition Width="84" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <ContentControl Content="A1" ContentTemplate="{StaticResource A1Identity}"
+                                Width="196" Height="48" HorizontalAlignment="Left" />
+                <Border Grid.Column="1" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" Padding="18,0,0,0">
+                    <StackPanel VerticalAlignment="Center" ToolTip="Testata pista selezionata.">
+                        <TextBlock Text="RWY" Style="{StaticResource StripLabel}" />
+                        <TextBlock Text="{Binding RunwayText}" Style="{StaticResource StripValue}" />
+                    </StackPanel>
+                </Border>
+                <Border Grid.Column="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="1,0,0,0" Padding="18,0,0,0">
+                    <StackPanel VerticalAlignment="Center" ToolTip="Fase confermata, se disponibile.">
+                        <TextBlock Text="PHASE" Style="{StaticResource StripLabel}" />
+                        <TextBlock Text="{Binding PhaseText}" Style="{StaticResource StripValue}" FontSize="18" />
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </DataTemplate>
+    </UserControl.Resources>
+    <UserControl.Style>
+        <Style TargetType="{x:Type local:FlightStrip}">
+            <Setter Property="Width" Value="560" />
+            <Setter Property="Height" Value="166" />
+            <Style.Triggers>
+                <Trigger Property="Variant" Value="UltraMinimal">
+                    <Setter Property="Width" Value="470" />
+                    <Setter Property="Height" Value="84" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </UserControl.Style>
+    <Border BorderBrush="{StaticResource PanelEdgeBrush}" BorderThickness="1" CornerRadius="9">
+        <Border.Background>
+            <SolidColorBrush Color="{StaticResource PanelColor}" Opacity="0.96" />
+        </Border.Background>
+        <ContentControl Content="FlightStrip">
+            <ContentControl.Style>
+                <Style TargetType="ContentControl">
+                    <Setter Property="ContentTemplate" Value="{StaticResource CompactLayout}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Variant, ElementName=Strip}" Value="UltraMinimal">
+                            <Setter Property="ContentTemplate" Value="{StaticResource UltraMinimalLayout}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </ContentControl.Style>
+        </ContentControl>
+    </Border>
+</UserControl>
